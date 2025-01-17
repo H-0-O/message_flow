@@ -1,0 +1,13 @@
+[package]
+name = "message_flow_drive"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+darling = "0.20.10"
+quote = "1.0.38"
+syn = "2.0.95"
+thiserror = "2.0.9"
