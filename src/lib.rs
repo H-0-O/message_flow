@@ -1,10 +1,16 @@
-use std::sync::Arc;
+pub mod connection;
+mod handler;
+mod message;
+pub mod result;
+pub mod util;
 
-use async_nats::ConnectOptions;
-use futures::{future::BoxFuture, StreamExt};
+pub use handler::{Handler, Register};
+pub use message::Message;
+pub use result::Result;
+pub use util::*;
 
-// #[derive(Serialize)]
-
+pub use async_nats::Client;
+pub use async_trait::async_trait;
 #[cfg(test)]
 mod tests {
     use core::panic;
@@ -45,31 +51,6 @@ mod tests {
     // async fn run_h(client: Client) -> std::result::Result<(), Box<dyn std::error::Error>> {}
 
     // pub type Handler = Arc<dyn Fn() -> BoxFuture<'static, Box<dyn Message + Send>> + Send + Sync>;
-    pub trait Message: MessageSerialize + Send {
-        fn to_json(&self) -> String {
-            self._to_json()
-        }
-    }
-
-    pub trait MessageSerialize {
-        fn _to_json(&self) -> String;
-    }
-
-    impl<T: Serialize + Message> MessageSerialize for T {
-        fn _to_json(&self) -> String {
-            let result = serde_json::to_string(self);
-            match result {
-                Ok(val) => val,
-                Err(e) => panic!("OK ERROR"),
-            }
-        }
-    }
-
-    impl Message for () {}
-    impl Message for u128 {}
-    impl Message for String {}
-    impl Message for Vec<String> {}
-
     #[MsgDef]
     #[derive(Serialize, Deserialize)]
     struct User {

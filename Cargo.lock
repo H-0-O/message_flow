@@ -63,6 +63,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-trait"
+version = "0.1.85"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f934833b4b7233644e5848f235df3f57ed8c80f1528a26c3dfa13d2147fa056"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "autocfg"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -666,6 +677,7 @@ name = "message_flow"
 version = "0.1.0"
 dependencies = [
  "async-nats",
+ "async-trait",
  "futures",
  "message_flow_drive",
  "serde",
@@ -678,6 +690,7 @@ name = "message_flow_drive"
 version = "0.1.0"
 dependencies = [
  "darling",
+ "proc-macro2",
  "quote",
  "syn",
  "thiserror 2.0.9",

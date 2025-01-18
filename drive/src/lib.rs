@@ -1,4 +1,4 @@
-use darling::{ast::NestedMeta, FromMeta};
+use darling::FromMeta;
 use error::Error;
 use proc_macro::TokenStream;
 use quote::quote;
@@ -6,11 +6,27 @@ use syn::parse_macro_input;
 
 mod error;
 mod msg_def;
+mod msg_flow;
+
+macro_rules! parse_nested_meta {
+    ($ty:ty, $args:expr) => {{
+        let meta = match darling::ast::NestedMeta::parse_meta_list($args.into()) {
+            Ok(v) => v,
+            Err(err) => {
+                return Error::from(err).write_errors();
+            }
+        };
+
+        match <$ty>::from_list(&meta) {
+            Ok(object_args) => object_args,
+            Err(err) => return Error::from(err).write_errors(),
+        }
+    }};
+}
 
 //---------------------------------- MsgDef
-#[allow(non_snake_case)]
-#[proc_macro_attribute]
-pub fn MsgDef(attr: TokenStream, item: TokenStream) -> TokenStream {
+#[proc_macro_derive(MsgDef)]
+pub fn msg_def(item: TokenStream) -> TokenStream {
     let __input = parse_macro_input!(item as syn::ItemStruct);
 
     let generated_tokens = msg_def::generate(__input);
@@ -22,38 +38,31 @@ pub fn MsgDef(attr: TokenStream, item: TokenStream) -> TokenStream {
 
 //------------------------------- msg_flow
 #[derive(Debug, FromMeta)]
-struct MsgFlowArgs {
-    prefix: Option<String>,
+pub(crate) struct MsgFlowArgs {
+    pattern: String,
 }
 #[proc_macro_attribute]
 pub fn msg_flow(attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as syn::ItemImpl);
+    let args = parse_nested_meta!(MsgFlowArgs, attr);
+    let generated_tokens = msg_flow::generate(input, args);
 
-    quote! {#input}.into()
+    match generated_tokens {
+        Ok(v) => v,
+        Err(e) => e.write_errors(),
+    }
 }
 
 //---------------------------------- msg_pattern
 #[derive(Debug, FromMeta)]
-struct Args {
+struct MsgPatternArgs {
     pattern: String,
 }
 
 #[proc_macro_attribute]
 pub fn msg_pattern(attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as syn::ItemFn);
-    let f_name = input.sig.ident.to_string();
-
-    let args = {
-        let attr_args = match NestedMeta::parse_meta_list(attr.into()) {
-            Ok(v) => v,
-            Err(e) => return Error::from(e).write_errors(),
-        };
-
-        match Args::from_list(&attr_args) {
-            Ok(v) => v,
-            Err(e) => return Error::from(e).write_errors(),
-        }
-    };
+    let args = parse_nested_meta!(MsgPatternArgs, attr);
 
     quote! {#input}.into()
 }
