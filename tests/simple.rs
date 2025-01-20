@@ -16,7 +16,6 @@ pub type Result<T> = std::result::Result<T, async_nats::Error>;
 
 #[tokio::test]
 async fn main() {
-    ::std::boxed::Box
     let register = append_register!(User, User2);
     // message_flow::connect("localhost:4222".into(), register);
     let e = connect().await;

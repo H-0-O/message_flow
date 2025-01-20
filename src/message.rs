@@ -1,6 +1,6 @@
 use serde::{de::DeserializeOwned, Serialize};
 
-pub trait Message: MessageSerialize {
+pub trait Message: MessageSerialize + Send {
     fn to_json(&self) -> String {
         self._to_json()
     }

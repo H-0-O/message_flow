@@ -13,13 +13,13 @@ macro_rules! parse_nested_meta {
         let meta = match darling::ast::NestedMeta::parse_meta_list($args.into()) {
             Ok(v) => v,
             Err(err) => {
-                return Error::from(err).write_errors();
+                return Error::from(err).write_errors().into();
             }
         };
 
         match <$ty>::from_list(&meta) {
             Ok(object_args) => object_args,
-            Err(err) => return Error::from(err).write_errors(),
+            Err(err) => return Error::from(err).write_errors().into(),
         }
     }};
 }
@@ -34,6 +34,7 @@ pub fn msg_def(item: TokenStream) -> TokenStream {
         Ok(v) => v,
         Err(e) => e.write_errors(),
     }
+    .into()
 }
 
 //------------------------------- msg_flow
@@ -51,6 +52,7 @@ pub fn msg_flow(attr: TokenStream, item: TokenStream) -> TokenStream {
         Ok(v) => v,
         Err(e) => e.write_errors(),
     }
+    .into()
 }
 
 //---------------------------------- msg_pattern
@@ -59,13 +61,13 @@ struct MsgPatternArgs {
     pattern: String,
 }
 
-#[proc_macro_attribute]
-pub fn msg_pattern(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let input = parse_macro_input!(item as syn::ItemFn);
-    let args = parse_nested_meta!(MsgPatternArgs, attr);
+// #[proc_macro_attribute]
+// pub fn msg_pattern(attr: TokenStream, item: TokenStream) -> TokenStream {
+//     let input = parse_macro_input!(item as syn::ItemFn);
+//     // let args = parse_nested_meta!(MsgPatternArgs, attr);
 
-    quote! {#input}.into()
-}
+//     quote! {#input}.into()
+// }
 
 #[proc_macro_attribute]
 pub fn event_pattern(attr: TokenStream, item: TokenStream) -> TokenStream {
