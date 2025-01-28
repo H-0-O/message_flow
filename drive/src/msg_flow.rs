@@ -1,6 +1,9 @@
-use darling::{ast::NestedMeta, util, FromMeta};
+use std::collections::HashMap;
+
+use darling::{ast::NestedMeta, util, FromAttributes, FromMeta};
+use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
-use syn::{ImplItem, ItemImpl, Type};
+use syn::{ImplItem, ItemImpl, MetaList, Type};
 
 use crate::{
     error::{Error, GeneratorResult},
@@ -9,6 +12,37 @@ use crate::{
 
 const REGISTER_TRAIT_PATH: &str = "message_flow::Register";
 const HANDLER_TRAIT_PATH: &str = "message_flow::Handler";
+
+#[derive(Debug)]
+enum Attributes {
+    Message(MessageAttribute),
+    Event(EventAttribute),
+}
+#[derive(Debug, FromAttributes)]
+#[darling(attributes(message))]
+struct MessageAttribute {
+    pattern: String,
+}
+
+#[derive(Debug, FromAttributes)]
+#[darling(attributes(event))]
+struct EventAttribute {
+    pattern: String,
+}
+
+impl Attributes {
+    fn from_attribute(attr: &syn::Attribute) -> Result<Self, darling::Error> {
+        if attr.path().is_ident("message") {
+            let parsed = MessageAttribute::from_attributes(&[attr.clone()])?;
+            Ok(Attributes::Message(parsed))
+        } else if attr.path().is_ident("event") {
+            let parsed = EventAttribute::from_attributes(&[attr.clone()])?;
+            Ok(Attributes::Event(parsed))
+        } else {
+            Err(darling::Error::custom("Unknown attribute"))
+        }
+    }
+}
 
 pub fn generate(__input: ItemImpl, args: MsgFlowArgs) -> GeneratorResult {
     let struct_name = match *__input.self_ty {
@@ -28,9 +62,15 @@ pub fn generate(__input: ItemImpl, args: MsgFlowArgs) -> GeneratorResult {
 
     let methods: Vec<proc_macro2::TokenStream> = items
         .iter()
-        .map(|f| {
-            if let ImplItem::Fn(func) = f {
-                return quote! { #func };
+        .map(|item| {
+            if let ImplItem::Fn(func) = item {
+                let func_sig = &func.sig;
+                let func_body = &func.block;
+                return quote! {
+                   #func_sig {
+                       #func_body
+                   }
+                };
             };
 
             quote! {}
@@ -72,7 +112,7 @@ fn generate_impl_register_trait(
             async fn register(client: std::sync::Arc<message_flow::Client>) -> message_flow::Result<()> {
                 let mut subscribe = client.subscribe(#pattern).await?;
 
-                tokio::spawn({
+                let ee = tokio::spawn({
                     let client = client.clone();
 
                     async move {
@@ -95,7 +135,8 @@ fn generate_impl_register_trait(
                         Ok::<(), async_nats::Error>(())
                     }
                 });
-
+                //TODO remove this await it must be go after connection
+                ee.await;
                 Ok(())
             }
         }
@@ -107,39 +148,54 @@ fn generate_impl_register_trait(
 fn generate_impl_handler_trait(__input: &ItemImpl, struct_name: &syn::Ident) -> GeneratorResult {
     let handler_trait_path = syn::Path::from_string(HANDLER_TRAIT_PATH).unwrap();
 
-    #[derive(Debug, FromMeta)]
-    struct FunctionArgs {
-        pattern: String,
-    }
+    let mut messages: HashMap<String, Vec<proc_macro2::TokenStream>> = HashMap::new();
+    let mut events: HashMap<String, Vec<proc_macro2::TokenStream>> = HashMap::new();
 
-    let patterns: Vec<proc_macro2::TokenStream> = {
-        __input
-            .items
-            .iter()
-            .map(|item| {
-                if let ImplItem::Fn(func) = item {
-                    panic!("IN THE FIRST");
-                    let attrs = &func.attrs;
-                    let function_args = {
-                        let tokens = attrs.iter().map(|attr| attr.to_token_stream());
-                        let token_stream = proc_macro2::TokenStream::from_iter(tokens);
-                        let args = match NestedMeta::parse_meta_list(token_stream) {
-                            Ok(v) => v,
-                            Err(error) => return Error::from(error).write_errors(),
-                        };
-                        match FunctionArgs::from_list(&args) {
-                            Ok(v) => v,
-                            Err(error) => return Error::from(error).write_errors(),
+    let _ = __input
+        .items
+        .iter()
+        .map(|item| {
+            if let ImplItem::Fn(func) = item {
+                let func_name = &func.sig.ident;
+                for attr in &func.attrs {
+                    match Attributes::from_attribute(&attr) {
+                        //TODO here must do some validations
+                        Ok(Attributes::Message(message)) => {
+                            if !messages.contains_key(&message.pattern) {
+                                messages.insert(message.pattern.clone(), vec![]);
+                            }
+                            messages.get_mut(&message.pattern).unwrap().push(quote! {
+                                    ::std::boxed::Box::new(resolver.#func_name().await?)
+                            });
                         }
-                    };
-                    let ee = func.sig.to_token_stream();
-                    return quote! {#ee};
+                        Ok(Attributes::Event(event)) => {
+                            if !events.contains_key(&event.pattern) {
+                                events.insert(event.pattern.clone(), vec![]);
+                            }
+                            events.get_mut(&event.pattern).unwrap().push(quote! {
+                                resolver.#func_name().await
+                            });
+                        }
+                        Err(err) => {
+                            panic!("Error parsing attribute: {}", err);
+                        }
+                    }
                 }
-                quote! {#item}
-            })
-            .collect()
-    };
-    // panic!("THE PATTERNS {:?} ", patterns);
+            }
+        })
+        .collect::<Vec<_>>();
+
+    let messages_token_stream: Vec<proc_macro2::TokenStream> = messages
+        .iter()
+        .map(|(pattern, fns)| {
+            let temp_first = &fns[0];
+            quote! {
+                #pattern => #temp_first
+            }
+        })
+        .collect();
+
+    //TODO implement the events
     let expanded = quote! {
 
         #[allow(unused_imports)]
@@ -153,6 +209,7 @@ fn generate_impl_handler_trait(__input: &ItemImpl, struct_name: &syn::Ident) -> 
                 let resolver = serde_json::from_slice::<Self>(payload).unwrap();
                 println!("IN HANDLE and message {:?} ", subject);
                 let func: ::std::boxed::Box<dyn message_flow::Message> = match subject.as_str() {
+                    #(#messages_token_stream)*,
                     _ => return Err(async_nats::Error::from("Pattern Not found")),
                 };
 

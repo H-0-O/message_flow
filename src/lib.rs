@@ -17,7 +17,7 @@ mod tests {
     use std::{collections::HashMap, error::Error, future::Future};
 
     use async_nats::Client;
-    use message_flow_drive::{event_pattern, msg_flow, msg_pattern, MsgDef};
+    use message_flow_drive::{event_pattern, msg_flow, MsgDef};
     use serde::{
         de::{DeserializeOwned, IntoDeserializer},
         Deserialize, Serialize, Serializer,
