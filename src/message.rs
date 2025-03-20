@@ -1,6 +1,32 @@
-use serde::{de::DeserializeOwned, Serialize};
+use std::fmt::Debug;
 
-pub trait Message: MessageSerialize + Send {
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct InComeMessage<T>
+where
+    T: Serialize,
+{
+    pub pattern: String,
+    pub data: T,
+    pub id: String,
+}
+
+impl<T> InComeMessage<T>
+where
+    T: Serialize,
+    T: DeserializeOwned,
+    T: Debug,
+{
+    pub fn new(message: &[u8]) -> Self {
+        println!("OK IT's here ");
+        let ee = serde_json::de::from_slice::<Self>(message).unwrap();
+        println!("OK THE EE {:?}", &ee);
+        ee
+    }
+}
+
+pub trait Message: MessageSerialize + Send + Debug {
     fn to_json(&self) -> String {
         self._to_json()
     }

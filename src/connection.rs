@@ -18,3 +18,13 @@ pub async fn connect(
     }
     Ok(())
 }
+
+pub async fn connect_and_wait(
+    addr: String,
+    registers: &[RegisterFn],
+) -> std::result::Result<(), Box<dyn std::error::Error>> {
+    let _ = connect(addr, registers).await?;
+    tokio::signal::ctrl_c().await?;
+    println!("FINISH THE PROGRAM");
+    Ok(())
+}

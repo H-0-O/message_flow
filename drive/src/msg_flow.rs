@@ -110,9 +110,10 @@ fn generate_impl_register_trait(
         #[message_flow::async_trait]
         impl #register_trait_path for #struct_name {
             async fn register(client: std::sync::Arc<message_flow::Client>) -> message_flow::Result<()> {
+                println!("THE PATTERN  {:?} " , #pattern);
                 let mut subscribe = client.subscribe(#pattern).await?;
 
-                let ee = tokio::spawn({
+                tokio::spawn({
                     let client = client.clone();
 
                     async move {
@@ -121,7 +122,7 @@ fn generate_impl_register_trait(
                             let __result = #struct_name::router(
                                 &request.subject.to_string() , request.payload.as_ref()
                             ).await;
-
+                            println!("OK THE __RESULT {:?} " , __result);
                             if let Err(err) = __result {
                                 return Err(err);
                             };
@@ -135,8 +136,6 @@ fn generate_impl_register_trait(
                         Ok::<(), async_nats::Error>(())
                     }
                 });
-                //TODO remove this await it must be go after connection
-                ee.await;
                 Ok(())
             }
         }
@@ -205,8 +204,11 @@ fn generate_impl_handler_trait(__input: &ItemImpl, struct_name: &syn::Ident) -> 
         #[message_flow::async_trait]
         impl #handler_trait_path for #struct_name {
             async fn router(subject: &String, payload: &[u8]) -> message_flow::Result<::std::boxed::Box<dyn message_flow::Message>> {
-
-                let resolver = serde_json::from_slice::<Self>(payload).unwrap();
+                let s = std::str::from_utf8(payload).unwrap(); // Safe if valid UTF-8
+                println!("THE SS  {:?} " , s);
+                // println!("THE PAYLOAD {:?} " , );
+                let resolver = message_flow::InComeMessage::<Self>::new(payload).data;
+                // let resolver = serde_json::from_slice::<Self>(payload).unwrap();
                 println!("IN HANDLE and message {:?} ", subject);
                 let func: ::std::boxed::Box<dyn message_flow::Message> = match subject.as_str() {
                     #(#messages_token_stream)*,

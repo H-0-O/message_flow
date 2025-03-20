@@ -5,6 +5,7 @@ pub mod result;
 pub mod util;
 
 pub use handler::{Handler, Register};
+pub use message::InComeMessage;
 pub use message::Message;
 pub use result::Result;
 pub use util::*;

@@ -4,7 +4,8 @@ use std::prelude::rust_2021::*;
 #[macro_use]
 extern crate std;
 use futures::StreamExt;
-use message_flow::{registers, Result};
+use message_flow::registers;
+use message_flow::Result;
 use message_flow_drive::{msg_flow, MsgDef};
 use serde::{Deserialize, Serialize};
 struct User {
@@ -227,9 +228,9 @@ pub const main: test::TestDescAndFn = test::TestDescAndFn {
         ignore: false,
         ignore_message: ::core::option::Option::None,
         source_file: "tests/code_gen.rs",
-        start_line: 14usize,
+        start_line: 15usize,
         start_col: 10usize,
-        end_line: 14usize,
+        end_line: 15usize,
         end_col: 14usize,
         compile_fail: false,
         no_run: false,
@@ -241,7 +242,7 @@ pub const main: test::TestDescAndFn = test::TestDescAndFn {
 #[allow(dead_code)]
 fn main() {
     let body = async {
-        let re = message_flow::connection::connect(
+        let _re = message_flow::connection::connect(
                 "".into(),
                 {
                     use message_flow::Register;
@@ -249,17 +250,7 @@ fn main() {
                 },
             )
             .await;
-        let rr = {
-            use message_flow::Register;
-            &[<User>::register as message_flow::RegisterFn]
-        };
-        {
-            ::std::io::_print(format_args!("HELLO\n"));
-        };
         let usr = User { first_name: "HO".into() };
-        {
-            ::std::io::_print(format_args!("{0:?}\n", usr.gr().await.unwrap()));
-        };
     };
     let mut body = body;
     #[allow(unused_mut)]
@@ -386,7 +377,7 @@ const _: () = {
                     let func: ::std::boxed::Box<dyn message_flow::Message> = match subject
                         .as_str()
                     {
-                        "service_A.greeting" => {
+                        "finalay_can" => {
                             ::std::boxed::Box::new(resolver.greeting().await?)
                         }
                         _ => return Err(async_nats::Error::from("Pattern Not found")),
@@ -399,10 +390,7 @@ const _: () = {
     }
     impl User {
         async fn greeting(&self) -> Result<String> {
-            Ok("OK HEEELO FROM GREETING".into())
-        }
-        async fn gr(&self) -> Result<String> {
-            Ok("OK HEEELO FROM gr".into())
+            { Ok("OK HEEELO FROM GREETING".into()) }
         }
     }
 };
