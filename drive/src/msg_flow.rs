@@ -211,8 +211,8 @@ fn generate_impl_handler_trait(__input: &ItemImpl, struct_name: &syn::Ident) -> 
                 // let resolver = serde_json::from_slice::<Self>(payload).unwrap();
                 println!("IN HANDLE and message {:?} ", subject);
                 let func: ::std::boxed::Box<dyn message_flow::Message> = match subject.as_str() {
-                    #(#messages_token_stream)*,
-                    _ => return Err(async_nats::Error::from("Pattern Not found")),
+                    #(#messages_token_stream),*,
+                    _ => return Err(async_nats::Error::from(format!("Can not find subscriber of {}" , subject.as_str()))),
                 };
 
                 Ok(func)
