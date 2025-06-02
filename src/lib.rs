@@ -15,9 +15,9 @@ pub use async_trait::async_trait;
 #[cfg(test)]
 mod tests {
     use core::panic;
-    use std::{collections::HashMap, error::Error, future::Future};
+    use std::{collections::HashMap, error::Error, future::Future, sync::Arc};
 
-    use async_nats::Client;
+    use async_nats::{Client, ConnectOptions};
     use message_flow_drive::{event_pattern, msg_flow, MsgDef};
     use serde::{
         de::{DeserializeOwned, IntoDeserializer},

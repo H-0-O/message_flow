@@ -7,9 +7,9 @@ pub struct InComeMessage<T>
 where
     T: Serialize,
 {
-    pub pattern: String,
+    // pub pattern: String,
     pub data: T,
-    pub id: String,
+    // pub id: String,
 }
 
 impl<T> InComeMessage<T>
@@ -18,9 +18,9 @@ where
     T: DeserializeOwned,
     T: Debug,
 {
-    pub fn new(message: &[u8]) -> Self {
+    pub fn new(message: &[u8]) -> T {
         println!("OK IT's here ");
-        let ee = serde_json::de::from_slice::<Self>(message).unwrap();
+        let ee = serde_json::de::from_slice::<T>(message).unwrap();
         println!("OK THE EE {:?}", &ee);
         ee
     }
