@@ -12,6 +12,7 @@ tokio = {version = "1.42.0" , features = ["full"]}
 serde = "1.0.217"
 serde_json = "1.0.135"
 async-trait = "0.1.85"
+log = "0.4.27"
 
 [dev-dependencies]
 async-trait = "0.1.85"
@@ -19,7 +20,17 @@ serde = "1.0.217"
 serde_json = "1.0.135"
 
 [features]
+default = ["nats" , "debug" , "info" , "warn" , "error" , "trace"]
+
 nats = []
+
+log = []
+debug = []
+info = []
+warn = []
+error = []
+trace = []
+
 
 [workspace]
 message_flow_drive = { path = "drive" }

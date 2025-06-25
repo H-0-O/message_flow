@@ -10,19 +10,6 @@
 - 🔒 Type-safe and structured messaging using `serde`  
 - 🌐 Broker-agnostic core (starting with NATS support)
 
----
-
-## 📦 Installation
-
-Add the crate to your `Cargo.toml`:
-
-```toml
-[dependencies]
-message_flow = "0.1.0" # Replace with your version
-tokio = { version = "1", features = ["full"] }
-serde = { version = "1.0", features = ["derive"] }
-anyhow = "1"
-```
 
 ---
 

@@ -108,21 +108,27 @@ fn generate_impl_register_trait(
             async fn register(client: std::sync::Arc<message_flow::Client>) -> message_flow::Result<()> {
                 let mut subscribe = client.subscribe(#pattern).await?;
 
+                message_flow::logger::info_log!("Subscribed to {} for struct {}", #pattern, stringify!(#struct_name));
+
                 tokio::spawn({
                     let client = client.clone();
 
+                    message_flow::logger::info_log!("Spawned task for struct {}", stringify!(#struct_name));
+
                     async move {
                         while let Some(request) = subscribe.next().await {
-                            println!("THE REQUEST {:?} " , request);
+                            message_flow::logger::info_log!("Received request for struct {}: {:?}", stringify!(#struct_name), request);
                             let __result = #struct_name::router(
                                 &request.subject.to_string() , request.payload.as_ref()
                             ).await;
-                            println!("OK THE __RESULT {:?} " , __result);
+                            message_flow::logger::info_log!("Result for struct {}: {:?}", stringify!(#struct_name), __result);
+
                             if let Err(err) = __result {
                                 return Err(err);
                             };
 
                             if let Some(reply) = request.reply {
+                                message_flow::logger::info_log!("Sending reply for struct {}: {:?}", stringify!(#struct_name), reply);
                                 let _ = client.
                                 publish(reply , __result.unwrap().to_json().into())
                                 .await?;
