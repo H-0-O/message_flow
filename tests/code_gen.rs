@@ -21,9 +21,6 @@ async fn main() {
     let _re = message_flow::connection::connect_and_wait("localhost:4222".into(), registers!(User , User2))
         .await
         .unwrap();
-    let usr = User {
-        first_name: "HO".into(),
-    };
 
 }
 

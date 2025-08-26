@@ -20,10 +20,10 @@ mod tests {
     use std::{collections::HashMap, error::Error, future::Future, sync::Arc};
 
     use async_nats::{Client, ConnectOptions};
-    use message_flow_drive::{event_pattern, msg_flow, MsgDef};
+    use message_flow_drive::{MsgDef, event_pattern, msg_flow};
     use serde::{
-        de::{DeserializeOwned, IntoDeserializer},
         Deserialize, Serialize, Serializer,
+        de::{DeserializeOwned, IntoDeserializer},
     };
 
     use super::*;

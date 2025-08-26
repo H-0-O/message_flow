@@ -1,0 +1,9 @@
+// TODO: Make #[msg_flow(pattern = "...")] argument optional.
+// - If `pattern` is provided, prepend it as a namespace to all #[message] patterns.
+//   e.g. #[msg_flow(pattern = "service_A")] + #[message(pattern = "1")]
+//        => subscription to "service_A.1"
+// - If `pattern` is omitted, use #[message] patterns directly.
+//   e.g. #[msg_flow] + #[message(pattern = "foo")]
+//        => subscription to "foo"
+// - Ensure the macro expansion generates explicit subscriptions for each final subject
+//   instead of relying on a single wildcard subscription.
