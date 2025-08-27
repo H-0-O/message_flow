@@ -1,12 +1,7 @@
-use futures::StreamExt;
-// use message_flow::Handler;
-// use message_flow::Register;
-use message_flow::registers;
-use message_flow::Message;
-use message_flow::Result;
-use message_flow_drive::event_pattern;
+use message_flow::{registers, Result};
 use message_flow_drive::{msg_flow, MsgDef};
 use serde::{Deserialize, Serialize};
+use futures::StreamExt;
 
 #[derive(MsgDef, Serialize, Deserialize, Debug)]
 struct User {
@@ -16,7 +11,6 @@ struct User {
 
 #[tokio::test]
 async fn main() {
-    println!("BEFORE ");
 
     let _re = message_flow::connection::connect_and_wait("localhost:4222".into(), registers!(User))
         .await
@@ -24,15 +18,24 @@ async fn main() {
 
 }
 
-#[msg_flow(pattern = "service_A")]
+#[derive(MsgDef , Debug , Serialize , Deserialize)]
+struct  UserResponse {
+    family_name: String
+}
+
+#[msg_flow]
 impl User {
-    #[message(pattern = "1")]
-    async fn greeting(&self) -> Result<String> {
+    #[message(pattern = "PA")]
+    async fn greeting(&self) -> Result<UserResponse> {
         println!("IN SERVICE 1");
-        Ok("OK HEEELO FROM GREETING".into())
+        let user_response = UserResponse {
+            family_name: "Hossein Salehi".into()
+        };
+
+        Ok(user_response)
     }
 
-    // #[message(pattern = "2")]
+    // #[message(pattern = "PA")]
     // async fn greeting2(&self) -> Result<String> {
     //     println!("IN SERVICE 1");
     //     Ok("OK HEEELO FROM GREETING".into())
