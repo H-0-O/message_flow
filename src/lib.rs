@@ -14,6 +14,7 @@ pub use util::*;
 
 pub use async_nats::Client;
 pub use async_trait::async_trait;
+pub use bytes::Bytes;
 #[cfg(test)]
 mod tests {
     use core::panic;

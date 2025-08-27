@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct InComeMessage<T>

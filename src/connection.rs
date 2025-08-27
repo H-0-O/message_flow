@@ -8,9 +8,9 @@ pub async fn connect(
     addr: String,
     registers: &[RegisterFn],
 ) -> std::result::Result<(), Box<dyn std::error::Error>> {
-    let client = ConnectOptions::new().connect(addr).await?;
+    let client = ConnectOptions::new().connect(&addr).await?;
     #[cfg(feature = "nats")]
-    logger::info_log!("Connected to NATS server at {}", addr);
+    logger::info_log!("Connected to NATS server at {}", &addr);
 
     let arced = Arc::new(client);
     for func in registers {

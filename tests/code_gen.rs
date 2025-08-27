@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(MsgDef, Serialize, Deserialize, Debug)]
 struct User {
-    first_name: String,
+    name: String,
 }
 
 
@@ -18,7 +18,7 @@ struct User {
 async fn main() {
     println!("BEFORE ");
 
-    let _re = message_flow::connection::connect_and_wait("localhost:4222".into(), registers!(User , User2))
+    let _re = message_flow::connection::connect_and_wait("localhost:4222".into(), registers!(User))
         .await
         .unwrap();
 
@@ -32,17 +32,17 @@ impl User {
         Ok("OK HEEELO FROM GREETING".into())
     }
 
-    #[message(pattern = "2")]
-    async fn greeting2(&self) -> Result<String> {
-        println!("IN SERVICE 1");
-        Ok("OK HEEELO FROM GREETING".into())
-    }
+    // #[message(pattern = "2")]
+    // async fn greeting2(&self) -> Result<String> {
+    //     println!("IN SERVICE 1");
+    //     Ok("OK HEEELO FROM GREETING".into())
+    // }
 
-    #[message(pattern = "3")]
-    async fn greeting3(&self) -> Result<String> {
-        println!("IN SERVICE 1");
-        Ok("OK HEEELO FROM GREETING".into())
-    }
+    // #[message(pattern = "3")]
+    // async fn greeting3(&self) -> Result<String> {
+    //     println!("IN SERVICE 1");
+    //     Ok("OK HEEELO FROM GREETING".into())
+    // }
     // #[event(pattern = "service_B")]
     // async fn ok(&self){
     //     println!("SERVICE B IS READY");
@@ -56,20 +56,20 @@ struct User2 {
 }
 
 
-#[msg_flow(pattern = "service_B")]
-impl User2 {
-    #[message(pattern = "ss")]
-    async fn greeting(&self) -> Result<String> {
-        println!("IN SERVICE 1");
-        Ok("OK HEEELO FROM GREETING".into())
-    }
+// #[msg_flow(pattern = "service_B")]
+// impl User2 {
+//     #[message(pattern = "ss")]
+//     async fn greeting(&self) -> Result<String> {
+//         println!("IN SERVICE 1");
+//         Ok("OK HEEELO FROM GREETING".into())
+//     }
 
-    #[message(pattern = "service_2")]
-    async fn ok(&self) -> Result<String>{
-        println!("SERVICE B IS READY");
-        Ok("OK HEEELO FROM GREETING".into())
-    }
-}
+//     #[message(pattern = "service_2")]
+//     async fn ok(&self) -> Result<String>{
+//         println!("SERVICE B IS READY");
+//         Ok("OK HEEELO FROM GREETING".into())
+//     }
+// }
 
 //THIS IS A new idea
 // the struct name without field can be used with non assoc methods in their impl block , and we don't parse the input for them and then

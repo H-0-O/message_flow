@@ -7,3 +7,6 @@
 //        => subscription to "foo"
 // - Ensure the macro expansion generates explicit subscriptions for each final subject
 //   instead of relying on a single wildcard subscription.
+
+
+// TODO we need to figure out where is the output of function and if it's primitive type then just reply it but if the function return is a struct we need to serialize it 
