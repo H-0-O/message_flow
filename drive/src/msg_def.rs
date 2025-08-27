@@ -1,5 +1,5 @@
 use darling::FromMeta;
-use quote::{quote, ToTokens};
+use quote::{quote};
 use syn::{self, ItemStruct};
 
 use crate::error::GeneratorResult;
