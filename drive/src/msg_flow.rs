@@ -27,15 +27,30 @@ struct EventAttribute {
 }
 
 impl Attributes {
-    fn from_attribute(attr: &syn::Attribute) -> Result<Self, darling::Error> {
+    fn from_attribute(attr: &syn::Attribute) -> Result<Self, syn::Error> {
         if attr.path().is_ident("message") {
             let parsed = MessageAttribute::from_attributes(&[attr.clone()])?;
+            if parsed.pattern.is_empty() {
+                return Err(syn::Error::new_spanned(
+                    attr,
+                    AttributeParseError::MessagePatternIsEmpty.to_string(),
+                ));
+            }
             Ok(Attributes::Message(parsed))
         } else if attr.path().is_ident("event") {
             let parsed = EventAttribute::from_attributes(&[attr.clone()])?;
+            if parsed.pattern.is_empty() {
+                return Err(syn::Error::new_spanned(
+                    attr,
+                    AttributeParseError::EventPatternIsEmpty.to_string(),
+                ));
+            }
             Ok(Attributes::Event(parsed))
         } else {
-            Err(darling::Error::custom("Unknown attribute"))
+            return Err(syn::Error::new_spanned(
+                attr,
+                AttributeParseError::UnknownAttribute.to_string(),
+            ));
         }
     }
 }
@@ -51,7 +66,12 @@ pub fn generate(__input: ItemImpl, args: MsgFlowArgs) -> GeneratorResult {
         }
         _ => panic!("Unsupported type for self_ty"),
     };
-    let expanded_register_trait = generate_impl_register_trait(&__input, &struct_name, &args);
+    let expanded_register_trait = match generate_impl_register_trait(&__input, &struct_name, &args)
+    {
+        Ok(token) => token,
+        Err(e) => return Err(e),
+    };
+
     // let expanded_handler_trait = generate_impl_handler_trait(&__input, &struct_name, &args)?;
 
     let items = &__input.items;
@@ -94,7 +114,7 @@ fn generate_impl_register_trait(
     __input: &ItemImpl,
     struct_name: &syn::Ident,
     args: &MsgFlowArgs,
-) -> proc_macro2::TokenStream {
+) -> GeneratorResult {
     let register_trait_path = syn::Path::from_string(REGISTER_TRAIT_PATH).unwrap();
 
     let base_pattern = match &args.pattern {

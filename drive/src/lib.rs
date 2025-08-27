@@ -32,7 +32,7 @@ pub fn msg_def(item: TokenStream) -> TokenStream {
     let generated_tokens = msg_def::generate(__input);
     match generated_tokens {
         Ok(v) => v,
-        Err(e) => e.write_errors(),
+        Err(e) => e.to_compile_error(),
     }
     .into()
 }
@@ -51,27 +51,13 @@ pub fn msg_flow(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     match generated_tokens {
         Ok(v) => v,
-        Err(e) => e.write_errors(),
+        Err(e) => e.to_compile_error(),
     }
     .into()
 }
 
-//---------------------------------- msg_pattern
-#[derive(Debug, FromMeta)]
-struct MsgPatternArgs {
-    pattern: String,
-}
-
-// #[proc_macro_attribute]
-// pub fn msg_pattern(attr: TokenStream, item: TokenStream) -> TokenStream {
-//     let input = parse_macro_input!(item as syn::ItemFn);
-//     // let args = parse_nested_meta!(MsgPatternArgs, attr);
-
-//     quote! {#input}.into()
-// }
-
 #[proc_macro_attribute]
-pub fn event_pattern(attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn event_pattern(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as syn::ItemFn);
 
     quote! {#input}.into()
