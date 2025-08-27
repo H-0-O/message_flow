@@ -40,6 +40,7 @@ pub fn msg_def(item: TokenStream) -> TokenStream {
 //------------------------------- msg_flow
 #[derive(Debug, FromMeta)]
 pub(crate) struct MsgFlowArgs {
+    #[darling(default)]
     pattern: Option<String>,
 }
 #[proc_macro_attribute]
