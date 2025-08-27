@@ -41,7 +41,7 @@ impl<T: Message + Serialize + DeserializeOwned + Send> MessageSerialize for T {
         let result = serde_json::to_string(self);
         match result {
             Ok(val) => val,
-            Err(e) => panic!("OK ERROR"),
+            Err(e) => panic!("Error happened {} " , e.is_data().to_string()),
         }
     }
 }
