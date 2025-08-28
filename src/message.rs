@@ -19,10 +19,7 @@ where
     T: Debug,
 {
     pub fn new(message: &[u8]) -> T {
-        println!("OK IT's here ");
-        let ee = serde_json::de::from_slice::<T>(message).unwrap();
-        println!("OK THE EE {:?}", &ee);
-        ee
+        serde_json::de::from_slice::<T>(message).unwrap()
     }
 }
 
