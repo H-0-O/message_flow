@@ -1,27 +1,7 @@
 use std::fmt::Debug;
 
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use serde::{Serialize, de::DeserializeOwned};
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct InComeMessage<T>
-where
-    T: Serialize,
-{
-    // pub pattern: String,
-    pub data: T,
-    // pub id: String,
-}
-
-impl<T> InComeMessage<T>
-where
-    T: Serialize,
-    T: DeserializeOwned,
-    T: Debug,
-{
-    pub fn new(message: &[u8]) -> T {
-        serde_json::de::from_slice::<T>(message).unwrap()
-    }
-}
 
 pub trait Message: MessageSerialize + Send + Debug {
     fn to_json(&self) -> String {
