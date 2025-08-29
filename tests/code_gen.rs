@@ -1,78 +1,50 @@
-use message_flow::{registers, Result};
-use message_flow_drive::{msg_flow, MsgDef};
-use serde::{Deserialize, Serialize};
 use futures::StreamExt;
+use message_flow::{Result, registers};
+use message_flow_drive::{MsgDef, msg_flow};
+use serde::{Deserialize, Serialize};
 
 #[derive(MsgDef, Serialize, Deserialize, Debug)]
 struct User {
     name: String,
+    age: Option<u128>,
 }
 
 
 #[tokio::test]
 async fn main() {
-
-    let _re = message_flow::connection::connect_and_wait("localhost:4222".into(), registers!(User))
-        .await
-        .unwrap();
-
+    let _re = message_flow::connection::connect_and_wait(
+        "localhost:4222".into(),
+        registers!(User),
+    )
+    .await
+    .unwrap();
 }
 
-#[derive(MsgDef , Debug , Serialize , Deserialize)]
-struct  UserResponse {
-    family_name: String
+#[derive(MsgDef, Debug, Serialize, Deserialize)]
+struct UserResponse {
+    family_name: String,
 }
 
 #[msg_flow]
 impl User {
-    #[message(pattern = "PA")]
+    #[message(pattern = "error")]
     async fn greeting(&self) -> Result<UserResponse> {
-        println!("IN SERVICE 1");
+        Err(async_nats::Error::from("Error happened"))
+    }
+
+    #[message(pattern = "user_response")]
+    async fn ok(self) -> Result<UserResponse> {
         let user_response = UserResponse {
-            family_name: "Hossein Salehi".into()
+            family_name: format!("{:} {}" , self.name , " Edd")
         };
 
         Ok(user_response)
     }
-
-    // #[message(pattern = "PA")]
-    // async fn greeting2(&self) -> Result<String> {
-    //     println!("IN SERVICE 1");
-    //     Ok("OK HEEELO FROM GREETING".into())
-    // }
-
-    // #[message(pattern = "3")]
-    // async fn greeting3(&self) -> Result<String> {
-    //     println!("IN SERVICE 1");
-    //     Ok("OK HEEELO FROM GREETING".into())
-    // }
-    // #[event(pattern = "service_B")]
-    // async fn ok(&self){
-    //     println!("SERVICE B IS READY");
-    // }
+    #[event(pattern = "log")]
+    async fn log(&self) {
+        println!("A log printed here");
+    }
 }
-
-
-#[derive(MsgDef, Serialize, Deserialize, Debug)]
-struct User2 {
-    first_name: String,
-}
-
-
-// #[msg_flow(pattern = "service_B")]
-// impl User2 {
-//     #[message(pattern = "ss")]
-//     async fn greeting(&self) -> Result<String> {
-//         println!("IN SERVICE 1");
-//         Ok("OK HEEELO FROM GREETING".into())
-//     }
-
-//     #[message(pattern = "service_2")]
-//     async fn ok(&self) -> Result<String>{
-//         println!("SERVICE B IS READY");
-//         Ok("OK HEEELO FROM GREETING".into())
-//     }
-// }
 
 //THIS IS A new idea
 // the struct name without field can be used with non assoc methods in their impl block , and we don't parse the input for them and then
@@ -89,6 +61,5 @@ struct User2 {
 //     async fn greeting() {}
 // }
 
-
-//The return types must be Result , it must checks at compile time and throw error if 
+//The return types must be Result , it must checks at compile time and throw error if
 // user use anything else instead of result or we must adapt the generated code with the user return

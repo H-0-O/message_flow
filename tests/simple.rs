@@ -1,5 +1,3 @@
-use std::io::Bytes;
-
 use async_nats::connect;
 use futures::StreamExt;
 use message_flow::Result;
@@ -13,7 +11,15 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 
     while let Some(msg) = subscriber.next().await {
         // let payload = std::str::from_utf8()?;
-        let resolver = message_flow::InComeMessage::<User>::new(msg.payload.as_ref());
+        // let resolver = message_flow::InComeMessage::<User>::new(msg.payload.as_ref());
+        let __resolver = serde_json::de::from_slice::<User>(msg.payload.as_ref());
+        let resolver = match __resolver {
+            Ok(t) => t,
+            Err(e) => {
+                let e = e.to_string();
+                panic!("dijfoi")
+            }
+        };
         let result = ::std::boxed::Box::new(resolver.test_1().await);
 
         if let Err(e) = *result {
@@ -25,9 +31,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             //     stringify!(#struct_name),
             //     reply
             // );
-            let _ = client
-                .publish(reply, result.unwrap().into())
-                .await?;
+            let _ = client.publish(reply, result.unwrap().into()).await?;
         }
     }
     Ok(())
