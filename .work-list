@@ -1,18 +1,12 @@
-1- Implemented namespaced message pattern support in #[msg_flow], ensuring explicit subject subscriptions instead of wildcard reliance. (done)
+- Implemented namespaced message pattern support in #[msg_flow], ensuring explicit subject subscriptions instead of wildcard reliance. (done)
 
-2- Make event attribute
+- Make event attribute (done)
 
-3- Make Error Handling Recoverable in Message Listener: Ensure that message listener threads do not panic when encountering errors.
+- Make Error Handling Recoverable in Message Listener: Ensure that message listener threads do not panic when encountering errors.
     Instead, errors must be handled gracefully and the thread should continue listening on subscribed patterns.
-    This improves system resilience and prevents disruption of active message flows.
+    This improves system resilience and prevents disruption of active message flows. (done)
 
-4- Handle Function Return Types for Message Responses: Determine how to process function outputs within the message handling flow. 
-    If the return value is a primitive type, reply directly with the value. If the return type is a struct, serialize the struct before sending the response.
-    This ensures consistent and correct handling of different return types in the messaging system.
-
-5- Validate Method Receiver Types in Struct Functions: Inspect struct methods and differentiate between those using &self
-    and those using self as the receiver. This check ensures correct handling of ownership
-    and borrowing semantics when processing struct functions within the messaging system. 
-
-6- Support Dynamic Schemas for Structs Without Fields: Allow structs without fields to be used with non-associated methods defined in their impl block.
+- Support Dynamic Schemas for Structs Without Fields: Allow structs without fields to be used with non-associated methods defined in their impl block.
      For these cases, input parsing is skipped, and the struct acts as a dynamic schema. Example:
+
+- complete error system : write rules for passing a defined Error schema to handle_error function 
