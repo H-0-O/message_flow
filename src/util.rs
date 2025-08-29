@@ -1,10 +1,9 @@
 use std::{future::Future, pin::Pin, sync::Arc};
 
-use async_nats::Client;
 
-use crate::Result;
+use crate::{Context, Result};
 
-pub type RegisterFn = fn(Arc<Client>) -> Pin<Box<dyn Future<Output = Result<()>> + Send>>;
+pub type RegisterFn = fn(Arc<Context>) -> Pin<Box<dyn Future<Output = Result<()>> + Send>>;
 
 #[macro_export]
 macro_rules! registers {

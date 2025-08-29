@@ -1,18 +1,21 @@
-use std::{sync::Arc};
+use std::sync::Arc;
 
-use async_nats::{ConnectOptions};
+use async_nats::ConnectOptions;
 
-use crate::{logger, RegisterFn};
+use crate::{RegisterFn, context::Context, logger};
 
 pub async fn connect(
     addr: String,
     registers: &[RegisterFn],
 ) -> std::result::Result<(), Box<dyn std::error::Error>> {
     let client = ConnectOptions::new().connect(&addr).await?;
+
+    let context = Context::new(client);
+
     #[cfg(feature = "nats")]
     logger::info_log!("Connected to NATS server at {}", &addr);
 
-    let arced = Arc::new(client);
+    let arced = Arc::new(context);
     for func in registers {
         if let Err(error) = func(arced.clone()).await {
             return Err(error);
