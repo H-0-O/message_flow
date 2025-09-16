@@ -1,5 +1,5 @@
 use futures::StreamExt;
-use message_flow::{Result, registers};
+use message_flow::{Result, registers , Client};
 use message_flow_drive::{MsgDef, msg_flow};
 use serde::{Deserialize, Serialize};
 
@@ -9,15 +9,24 @@ struct User {
     age: Option<u128>,
 }
 
+#[derive(MsgDef , Serialize, Deserialize, Debug)]
+struct ErrorResponse {
+    message: String
+}
 
 #[tokio::test]
 async fn main() {
-    let _re = message_flow::connection::connect_and_wait(
-        "localhost:4222".into(),
-        registers!(User),
-    )
-    .await
-    .unwrap();
+    let app = message_flow::app::App::new("localhost:4222".into())
+        .await
+        .unwrap()
+        .set_error_handler(|code: u16, message: String, client: &Client|{
+            let rr= ErrorResponse {
+                message: String::from("THIS IS TEST ERROR MESSAGE")
+            };
+            return Box::new(rr);
+        })
+        .connect_and_wait(registers!(User))
+        .await;
 }
 
 #[derive(MsgDef, Debug, Serialize, Deserialize)]
@@ -35,7 +44,7 @@ impl User {
     #[message(pattern = "user_response")]
     async fn ok(self) -> Result<UserResponse> {
         let user_response = UserResponse {
-            family_name: format!("{:} {}" , self.name , " Edd")
+            family_name: format!("{:} {}", self.name, " Edd"),
         };
 
         Ok(user_response)
