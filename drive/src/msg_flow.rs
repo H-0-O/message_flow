@@ -4,10 +4,12 @@ use darling::{FromAttributes, FromMeta};
 use quote::quote;
 use syn::{ImplItem, ItemImpl, Type};
 
-use crate::{error::GeneratorResult, MsgFlowArgs};
+use crate::{
+    error::{AttributeParseError, GeneratorResult},
+    MsgFlowArgs,
+};
 
 const REGISTER_TRAIT_PATH: &str = "message_flow::Register";
-const HANDLER_TRAIT_PATH: &str = "message_flow::Handler";
 
 #[derive(Debug)]
 enum Attributes {
@@ -27,15 +29,30 @@ struct EventAttribute {
 }
 
 impl Attributes {
-    fn from_attribute(attr: &syn::Attribute) -> Result<Self, darling::Error> {
+    fn from_attribute(attr: &syn::Attribute) -> Result<Self, syn::Error> {
         if attr.path().is_ident("message") {
             let parsed = MessageAttribute::from_attributes(&[attr.clone()])?;
+            if parsed.pattern.is_empty() {
+                return Err(syn::Error::new_spanned(
+                    attr,
+                    AttributeParseError::MessagePatternIsEmpty.to_string(),
+                ));
+            }
             Ok(Attributes::Message(parsed))
         } else if attr.path().is_ident("event") {
             let parsed = EventAttribute::from_attributes(&[attr.clone()])?;
+            if parsed.pattern.is_empty() {
+                return Err(syn::Error::new_spanned(
+                    attr,
+                    AttributeParseError::EventPatternIsEmpty.to_string(),
+                ));
+            }
             Ok(Attributes::Event(parsed))
         } else {
-            Err(darling::Error::custom("Unknown attribute"))
+            return Err(syn::Error::new_spanned(
+                attr,
+                AttributeParseError::UnknownAttribute.to_string(),
+            ));
         }
     }
 }
@@ -46,13 +63,26 @@ pub fn generate(__input: ItemImpl, args: MsgFlowArgs) -> GeneratorResult {
             if let Some(ident) = type_path.path.get_ident() {
                 ident.clone()
             } else {
-                panic!("Expected an identifier for the struct name");
+                return Err(syn::Error::new_spanned(
+                    type_path,
+                    "Expected an identifier for the struct name",
+                ));
             }
         }
-        _ => panic!("Unsupported type for self_ty"),
+        _ => {
+            return Err(syn::Error::new_spanned(
+                __input,
+                "Unsupported type for self_ty",
+            ))
+        }
     };
-    let expanded_register_trait = generate_impl_register_trait(&struct_name, &args);
-    let expanded_handler_trait = generate_impl_handler_trait(&__input, &struct_name, &args)?;
+    let expanded_register_trait = match generate_impl_register_trait(&__input, &struct_name, &args)
+    {
+        Ok(token) => token,
+        Err(e) => return Err(e),
+    };
+
+    // let expanded_handler_trait = generate_impl_handler_trait(&__input, &struct_name, &args)?;
 
     let items = &__input.items;
 
@@ -79,7 +109,7 @@ pub fn generate(__input: ItemImpl, args: MsgFlowArgs) -> GeneratorResult {
 
             #expanded_register_trait
 
-            #expanded_handler_trait
+
 
             impl #struct_name {
                 #(#methods)*
@@ -90,156 +120,159 @@ pub fn generate(__input: ItemImpl, args: MsgFlowArgs) -> GeneratorResult {
     .into())
 }
 
-fn generate_impl_register_trait(
-    struct_name: &syn::Ident,
-    args: &MsgFlowArgs,
-) -> proc_macro2::TokenStream {
-    let register_trait_path = syn::Path::from_string(REGISTER_TRAIT_PATH).unwrap();
-
-    let pattern = format!("{}.>", &args.pattern);
-    let expanded = quote! {
-
-        #[allow(unused_imports)]
-        use #register_trait_path;
-
-        #[automatically_derived]
-        #[message_flow::async_trait]
-        impl #register_trait_path for #struct_name {
-            async fn register(client: std::sync::Arc<message_flow::Client>) -> message_flow::Result<()> {
-                let mut subscribe = client.subscribe(#pattern).await?;
-
-                message_flow::logger::info_log!("Subscribed to {} for struct {}", #pattern, stringify!(#struct_name));
-
-                tokio::spawn({
-                    let client = client.clone();
-
-                    message_flow::logger::info_log!("Spawned task for struct {}", stringify!(#struct_name));
-
-                    async move {
-                        while let Some(request) = subscribe.next().await {
-                            message_flow::logger::info_log!("Received request for struct {}: {:?}", stringify!(#struct_name), request);
-                            let __result = #struct_name::router(
-                                &request.subject.to_string() , request.payload.as_ref()
-                            ).await;
-                            message_flow::logger::info_log!("Result for struct {}: {:?}", stringify!(#struct_name), __result);
-
-                            if let Err(err) = __result {
-                                return Err(err);
-                            };
-
-                            if let Some(reply) = request.reply {
-                                message_flow::logger::info_log!("Sending reply for struct {}: {:?}", stringify!(#struct_name), reply);
-                                let _ = client.
-                                publish(reply , __result.unwrap().to_json().into())
-                                .await?;
-                            }
-                        }
-                        Ok::<(), async_nats::Error>(())
-                    }
-                });
-                Ok(())
-            }
-        }
-    };
-
-    expanded
+#[derive(Debug)]
+enum MacroType {
+    Message,
+    Event,
+}
+#[derive(Debug)]
+struct AttrMacro {
+    macro_type: MacroType,
+    invokable_function: proc_macro2::TokenStream,
 }
 
-fn generate_impl_handler_trait(
+fn generate_impl_register_trait(
     __input: &ItemImpl,
     struct_name: &syn::Ident,
     args: &MsgFlowArgs,
 ) -> GeneratorResult {
-    let handler_trait_path = syn::Path::from_string(HANDLER_TRAIT_PATH).unwrap();
+    let register_trait_path = syn::Path::from_string(REGISTER_TRAIT_PATH).unwrap();
 
-    let mut messages: HashMap<String, Vec<proc_macro2::TokenStream>> = HashMap::new();
-    let mut events: HashMap<String, Vec<proc_macro2::TokenStream>> = HashMap::new();
+    let base_pattern = match &args.pattern {
+        Some(pattern) => format!("{}.", pattern),
+        None => "".into(),
+    };
+    // the Key is pattern defined by user
+    let mut macros: HashMap<String, AttrMacro> = HashMap::new();
 
-    let _ = __input
-        .items
-        .iter()
-        .map(|item| {
-            if let ImplItem::Fn(func) = item {
-                let func_name = &func.sig.ident;
-                for attr in &func.attrs {
-                    match Attributes::from_attribute(&attr) {
-                        //TODO here must do some validations
-                        Ok(Attributes::Message(message)) => {
-                            if !messages.contains_key(&message.pattern) {
-                                messages.insert(message.pattern.clone(), vec![]);
+    for item in &__input.items {
+        if let ImplItem::Fn(func) = item {
+            let func_name = &func.sig.ident;
+            for attr in &func.attrs {
+                match Attributes::from_attribute(&attr) {
+                    //TODO here must do some validations
+                    Ok(Attributes::Message(message)) => {
+                        if !macros.contains_key(&message.pattern) {
+                            macros.insert(
+                                message.pattern.clone(),
+                                AttrMacro {
+                                    macro_type: MacroType::Message,
+                                    invokable_function: quote! {},
+                                },
+                            );
+                        }
+                        macros.get_mut(&message.pattern).unwrap().invokable_function = {
+                            quote! {
+                                    #func_name
                             }
-                            // the resolver is InComeMessage struct that user defined that
-                            messages.get_mut(&message.pattern).unwrap().push(quote! {
-                                    ::std::boxed::Box::new(resolver.#func_name().await?)
-                            });
-                        }
-                        Ok(Attributes::Event(event)) => {
-                            if !events.contains_key(&event.pattern) {
-                                events.insert(event.pattern.clone(), vec![]);
-                            }
-                            // the resolver is InComeMessage struct that user defined that
-                            events.get_mut(&event.pattern).unwrap().push(quote! {
-                                resolver.#func_name().await
-                            });
-                        }
-                        Err(err) => {
-                            panic!("Error parsing attribute: {}", err);
-                        }
+                        };
                     }
+                    Ok(Attributes::Event(event)) => {
+                        if !macros.contains_key(&event.pattern) {
+                            macros.insert(
+                                event.pattern.clone(),
+                                AttrMacro {
+                                    macro_type: MacroType::Event,
+                                    invokable_function: quote! {},
+                                },
+                            );
+                        }
+
+                        macros.get_mut(&event.pattern).unwrap().invokable_function = {
+                            quote! {
+                                    #func_name
+                            }
+                        };
+                    }
+                    Err(err) => return Err(err),
                 }
             }
-        })
-        .collect::<Vec<_>>();
+        }
+    }
 
-    // println!("THE EVENTS : {:?} ", events);
-    let messages_token_stream: Vec<proc_macro2::TokenStream> = messages
+    let messages_token_stream: Vec<proc_macro2::TokenStream> = macros
         .iter()
-        .map(|(pattern, fns)| {
-            let temp_first = &fns[0];
-            let _pattern = format!("{}.{}", args.pattern, pattern);
+        .map(|(pattern, macro_attr)| {
+            let function_to_invoke = &macro_attr.invokable_function;
+            let topic_pattern = format!("{}{}", base_pattern, pattern);
+
+            let reply_block = quote! {
+                if let Some(reply) = msg.reply {
+                    message_flow::logger::info_log!(
+                        "Sending reply for struct {}: {:?}",
+                        stringify!(#struct_name),
+                        reply
+                    );
+                    let byte_response = bytes::Bytes::from(response.to_json());
+                    let _ = client.publish(reply, byte_response).await?;
+                }
+            };
+
+            let handler = match macro_attr.macro_type {
+                MacroType::Message => {
+                    quote! {
+                        let result = resolver.#function_to_invoke().await;
+
+                        let response: ::std::boxed::Box<dyn message_flow::Message> = match result {
+                            Ok(val) => ::std::boxed::Box::new(val),
+                            Err(_err) => (context.error_handler)(500 , _err.to_string() , client),
+                        };
+
+                        #reply_block
+                    }
+                }
+                MacroType::Event => {
+                    quote! {
+                        resolver.#function_to_invoke().await
+                    }
+                }
+            };
+
             quote! {
-                #_pattern => #temp_first
+                tokio::spawn({
+                    let context = context.clone();
+                    async move {
+                        let client = &context.client;
+                        let mut subscription = client.subscribe(#topic_pattern).await?;
+
+                        message_flow::logger::info_log!(
+                            "Spawned task for struct {}",
+                            stringify!(#struct_name)
+                        );
+
+                        while let Some(msg) = subscription.next().await {
+                            message_flow::logger::info_log!(
+                                "Received request for struct {}: {:?}",
+                                stringify!(#struct_name),
+                                msg
+                            );
+
+                            match serde_json::from_slice::<#struct_name>(msg.payload.as_ref()) {
+                                Ok(resolver) => {
+                                    #handler
+                                }
+                                Err(_error) => {
+                                    let response = (context.error_handler)(422 , _error.to_string() , client);
+                                    #reply_block
+                                }
+                            }
+                        }
+
+                        Ok::<(), async_nats::Error>(())
+                    }
+                });
             }
         })
         .collect();
 
-    let events_token_stream: Vec<proc_macro2::TokenStream> = events
-        .iter()
-        .map(|(pattern, fns)| {
-            let temp_first = &fns[0];
-            let _pattern = format!("{}.{}", args.pattern, pattern);
-            quote! {
-                #_pattern => #temp_first
-            }
-        })
-        .collect();
-
-    // println!("THE PATTERN {:?} " , messages_token_stream.to_vec());
-    //TODO implement the events
-    let expanded = quote! {
-
-        #[allow(unused_imports)]
-        use #handler_trait_path;
-
+    Ok(quote! {
         #[automatically_derived]
         #[message_flow::async_trait]
-        impl #handler_trait_path for #struct_name {
-            async fn router(subject: &String, payload: &[u8]) -> message_flow::Result<::std::boxed::Box<dyn message_flow::Message>> {
-                let s = std::str::from_utf8(payload).unwrap(); // Safe if valid UTF-8
-                // println!("THE SS  {:?} " , s);
-                let resolver = message_flow::InComeMessage::<Self>::new(payload);
-                // let resolver = serde_json::from_slice::<Self>(payload).unwrap();
-                println!("IN HANDLE and message {:?} ", subject.as_str());
-                let func: ::std::boxed::Box<dyn message_flow::Message> = match subject.as_str() {
-                    #(#messages_token_stream),*,
-                    _ => return Err(async_nats::Error::from(format!("Can not find subscriber of {}" , subject.as_str()))),
-                };
-
-                Ok(func)
+        impl #register_trait_path for #struct_name {
+            async fn register(context: std::sync::Arc<message_flow::Context>) -> message_flow::Result<()> {
+                #(#messages_token_stream)*
+                Ok(())
             }
         }
-
-    };
-
-    Ok(expanded)
+    })
 }

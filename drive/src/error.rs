@@ -2,18 +2,28 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use thiserror::Error;
 
-pub type GeneratorResult = Result<TokenStream, Error>;
+pub type GeneratorResult = Result<TokenStream, syn::Error>;
 
 #[derive(Error, Debug)]
 pub enum Error {
-    #[error("Pattern Can not be empty")]
-    PatternIsEmpty,
-
     #[error("Darling error: {0}")]
     DarlingError(#[from] darling::Error),
 
     #[error("Syn error: {0}")]
     SynError(#[from] syn::Error),
+}
+
+#[derive(Debug, Error)]
+pub enum AttributeParseError {
+
+    #[error("Message Pattern Can not be empty")]
+    MessagePatternIsEmpty,
+
+    #[error("Event Pattern Can not be empty")]
+    EventPatternIsEmpty,
+
+    #[error("Unknown attribute")]
+    UnknownAttribute,
 }
 
 impl Error {
