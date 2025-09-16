@@ -1,12 +1,12 @@
 pub mod logger;
 
-pub mod connection;
-pub mod context;
+pub mod app;
 pub mod error;
-mod handler;
-mod message;
+pub mod context;
 pub mod result;
 pub mod util;
+mod handler;
+mod message;
 
 pub use context::Context;
 pub use handler::Register;
