@@ -6,6 +6,8 @@
     Instead, errors must be handled gracefully and the thread should continue listening on subscribed patterns.
     This improves system resilience and prevents disruption of active message flows. (done)
 
+- Add automatic `ctx: Context` injection into `#[message]` handler functions. (done)
+ 
 - Support Dynamic Schemas for Structs Without Fields: Allow structs without fields to be used with non-associated methods defined in their impl block.
      For these cases, input parsing is skipped, and the struct acts as a dynamic schema. Example:
 
