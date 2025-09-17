@@ -1,7 +1,8 @@
 use futures::StreamExt;
-use message_flow::{Result, registers , Client};
+use message_flow::{registers, Client, Context, Result};
 use message_flow_drive::{MsgDef, msg_flow};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 
 #[derive(MsgDef, Serialize, Deserialize, Debug)]
 struct User {
@@ -37,7 +38,13 @@ struct UserResponse {
 #[msg_flow]
 impl User {
     #[message(pattern = "error")]
-    async fn greeting(&self) -> Result<UserResponse> {
+    async fn greeting(&self , ctx: &Context) -> Result<UserResponse> {
+        let payload = json! (
+            {
+                "name": "Hossein"
+            }
+        ).to_string().into();
+        let  res = ctx.client.publish("from_here", payload).await;
         Err(async_nats::Error::from("Error happened"))
     }
 

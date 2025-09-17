@@ -21,8 +21,4 @@ impl Context {
             client: client,
         }
     }
-
-    pub fn set_error_handler(&mut self, callback: ErrorHandler) {
-        self.error_handler = callback
-    }
 }

@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use darling::{FromAttributes, FromMeta};
-use quote::quote;
-use syn::{ImplItem, ItemImpl, Type};
+use quote::{quote, ToTokens};
+use syn::{FnArg, ImplItem, ItemImpl, Type};
 
 use crate::{
     error::{AttributeParseError, GeneratorResult},
@@ -129,6 +129,7 @@ enum MacroType {
 struct AttrMacro {
     macro_type: MacroType,
     invokable_function: proc_macro2::TokenStream,
+    invokable_has_ctx: bool,
 }
 
 fn generate_impl_register_trait(
@@ -148,6 +149,30 @@ fn generate_impl_register_trait(
     for item in &__input.items {
         if let ImplItem::Fn(func) = item {
             let func_name = &func.sig.ident;
+            let has_ctx = func.sig.inputs.iter().any(|f| {
+                match f {
+                    FnArg::Receiver(_) => false, // means the argument is self
+                    FnArg::Typed(t) => {
+                        let inner_ty = match t.ty.as_ref() {
+                            syn::Type::Reference(r) => r.elem.as_ref(),
+                            other => other,
+                        };
+
+                        if let syn::Type::Path(pa) = inner_ty {
+                            let ty_str = pa
+                                .path
+                                .segments
+                                .iter()
+                                .map(|seg| seg.ident.to_string())
+                                .collect::<Vec<_>>()
+                                .join("::");
+                            ty_str == "Context" || ty_str == "message_flow::Context"
+                        } else {
+                            false
+                        }
+                    }
+                }
+            });
             for attr in &func.attrs {
                 match Attributes::from_attribute(&attr) {
                     //TODO here must do some validations
@@ -158,6 +183,7 @@ fn generate_impl_register_trait(
                                 AttrMacro {
                                     macro_type: MacroType::Message,
                                     invokable_function: quote! {},
+                                    invokable_has_ctx: has_ctx,
                                 },
                             );
                         }
@@ -174,6 +200,7 @@ fn generate_impl_register_trait(
                                 AttrMacro {
                                     macro_type: MacroType::Event,
                                     invokable_function: quote! {},
+                                    invokable_has_ctx: has_ctx,
                                 },
                             );
                         }
@@ -208,10 +235,18 @@ fn generate_impl_register_trait(
                 }
             };
 
+            let inputs = if macro_attr.invokable_has_ctx {
+                quote! {
+                    &*context
+                }
+            }else {
+                quote! {}
+            };
+
             let handler = match macro_attr.macro_type {
                 MacroType::Message => {
                     quote! {
-                        let result = resolver.#function_to_invoke().await;
+                        let result = resolver.#function_to_invoke(#inputs).await;
 
                         let response: ::std::boxed::Box<dyn message_flow::Message> = match result {
                             Ok(val) => ::std::boxed::Box::new(val),
@@ -223,7 +258,7 @@ fn generate_impl_register_trait(
                 }
                 MacroType::Event => {
                     quote! {
-                        resolver.#function_to_invoke().await
+                        resolver.#function_to_invoke(#inputs).await
                     }
                 }
             };
