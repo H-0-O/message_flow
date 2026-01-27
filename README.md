@@ -74,68 +74,237 @@ impl User2 {
 ## 🔌 Connecting to the Broker
 
 ```rust
-#[tokio::test]
-async fn main() {
-    println!("BEFORE");
+use message_flow::{App, registers};
 
-    let _result = message_flow::connection::connect_and_wait(
-        "localhost:4222".into(),
-        registers!(User, User2)
-    )
-    .await
-    .unwrap();
-
-    let usr = User {
-        first_name: "HO".into(),
-    };
-
-    // You can send or respond to messages
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = App::new("localhost:4222".to_string()).await?;
+    app.connect_and_wait(registers!(User, User2)).await?;
+    Ok(())
 }
+```
+
+### Custom Error Handling
+
+You can customize how errors are handled and formatted:
+
+```rust
+use message_flow::{App, Message, DefaultResponseErrorSchema, registers};
+
+let app = App::new("localhost:4222".to_string()).await?
+    .set_error_handler(|code, msg, _client| {
+        Box::new(DefaultResponseErrorSchema {
+            code,
+            message: format!("Custom error: {}", msg),
+        })
+    });
+app.connect_and_wait(registers!(User)).await?;
 ```
 
 ---
 
 ## 🧠 Macro Reference
 
-- `#[msg_flow(pattern = "...")]`: Defines the root pattern/topic for message handlers.
-- `#[message(pattern = "...")]`: Registers individual handler methods.
-- `#[derive(MsgDef)]`: Derives traits required for a type to handle messages.
-- `registers!(...)`: Combines multiple handler types for broker registration.
+### `#[derive(MsgDef)]`
+
+Derives the `Message` trait for a struct, allowing it to be used as a message type.
+
+**Requirements:**
+- Must also derive `Serialize`, `Deserialize` from `serde`
+- Must derive `Debug`
+
+**Example:**
+```rust
+#[derive(MsgDef, Serialize, Deserialize, Debug)]
+struct MyMessage {
+    data: String,
+}
+```
+
+### `#[msg_flow(pattern = "...")]`
+
+Marks an `impl` block as containing message handlers. The optional `pattern` parameter
+defines a base topic pattern that is prepended to all handler patterns.
+
+**Arguments:**
+- `pattern` (optional): Base pattern/topic for all handlers in this impl block
+
+**Example:**
+```rust
+#[msg_flow(pattern = "service_name")]
+impl MyHandler {
+    // handlers here
+}
+```
+
+### `#[message(pattern = "...")]`
+
+Marks a method as a message handler. The method must be async and return a `Result`.
+
+**Arguments:**
+- `pattern` (required): The message pattern/topic for this handler
+
+**Handler Signature:**
+- Must be an async method
+- Can optionally take `&Context` as a parameter
+- Must return `Result<T, E>` where `T: Message`
+
+**Example:**
+```rust
+#[message(pattern = "handler1")]
+async fn handle(&self) -> Result<String, Box<dyn std::error::Error>> {
+    Ok("Response".into())
+}
+
+// With context
+#[message(pattern = "handler2")]
+async fn handle_with_context(&self, context: &Context) -> Result<String, Box<dyn std::error::Error>> {
+    // Use context.client to send messages
+    Ok("Response".into())
+}
+```
+
+### `registers!(...)`
+
+Macro that creates an array of registration functions for multiple handler types.
+
+**Arguments:**
+- One or more handler types (comma-separated, trailing comma allowed)
+
+**Example:**
+```rust
+registers!(User, User2, MyHandler)
+```
 
 ---
 
 ## 📚 Architecture Overview
 
+### Core Components
+
+1. **Message Types**: Structs that derive `MsgDef` and implement `Serialize`/`Deserialize`
+2. **Handlers**: Methods annotated with `#[message]` that process incoming messages
+3. **Registration**: The `Register` trait (auto-implemented) that sets up broker subscriptions
+4. **Application**: The `App` struct that manages broker connections and handler registration
+
+### Message Flow
+
 ```
-Service Struct + #[msg_flow] → Base pattern
-Handler Methods + #[message] → Sub-pattern routing
-connect_and_wait → Connects to broker and binds handlers
+1. Define Message Struct → #[derive(MsgDef)]
+2. Implement Handlers → #[msg_flow] + #[message]
+3. Register with App → App::connect_and_wait(registers!(...))
+4. Broker receives message → Deserializes to struct
+5. Handler invoked → Returns response
+6. Response sent back → Serialized and published
 ```
+
+### Pattern Matching
+
+Message patterns are constructed by combining:
+- Base pattern from `#[msg_flow(pattern = "...")]` (optional)
+- Handler pattern from `#[message(pattern = "...")]`
+
+**Example:**
+- `#[msg_flow(pattern = "service")]` + `#[message(pattern = "handler")]`
+- Results in subscription to: `"service.handler"`
+
+### Error Handling
+
+- **Handler Errors**: Caught and passed to the error handler
+- **Deserialization Errors**: Return 422 status with error message
+- **Custom Error Handler**: Set via `App::set_error_handler()`
 
 ---
 
 ## 🧪 Testing
 
-Start NATS locally:
+### Prerequisites
+
+Start NATS server locally:
 
 ```bash
 nats-server
 ```
 
-Run and test:
+### Running Tests
 
 ```bash
 cargo test
 ```
 
-Send messages from CLI:
+### Testing with NATS CLI
+
+Send messages from the command line:
 
 ```bash
-nats pub service_A.1 '{}'
-nats pub service_B.ss '{}'
+# Request-reply pattern (expects response)
+nats request service_A.1 '{"first_name":"John"}' 
+
+# Publish message
+nats pub service_A.1 '{"first_name":"John"}'
+```
+
+### Example Test
+
+```rust
+use message_flow::{App, registers, msg_flow, message, MsgDef};
+use serde::{Serialize, Deserialize};
+
+#[derive(MsgDef, Serialize, Deserialize, Debug)]
+struct TestMessage {
+    value: i32,
+}
+
+#[msg_flow(pattern = "test")]
+impl TestMessage {
+    #[message(pattern = "echo")]
+    async fn echo(&self) -> Result<i32, Box<dyn std::error::Error>> {
+        Ok(self.value * 2)
+    }
+}
+
+#[tokio::test]
+async fn test_handler() {
+    let app = App::new("localhost:4222".to_string()).await.unwrap();
+    // Test your handlers
+}
 ```
 
 ---
+
+## 📖 API Documentation
+
+### Core Types
+
+- **`App`**: Main application struct for managing connections
+- **`Context`**: Request context with broker client and error handler
+- **`Message`**: Trait for serializable message types
+- **`Register`**: Trait for handler registration (auto-implemented)
+- **`Result<T>`**: Type alias for `Result<T, async_nats::Error>`
+
+### Key Functions
+
+- **`App::new(addr)`**: Create a new app and connect to broker
+- **`App::connect(registers)`**: Register handlers and start listening
+- **`App::connect_and_wait(registers)`**: Connect and wait for shutdown signal
+- **`App::set_error_handler(callback)`**: Set custom error handler
+
+### Logging
+
+Feature-gated logging macros are available:
+
+```rust
+use message_flow::{debug_log, info_log, warn_log, error_log, trace_log};
+
+info_log!("Application started");
+debug_log!("Debug information: {}", value);
+```
+
+Enable logging features in `Cargo.toml`:
+```toml
+[features]
+default = ["log", "info", "warn", "error"]
+```
 
 ## 📦 Planned Features
 
@@ -147,6 +316,28 @@ nats pub service_B.ss '{}'
 
 For detailed roadmap and development plans, see [ROADMAP.md](./ROADMAP.md)  
 For immediate tasks and bugs, see [TODO.md](./TODO.md)
+
+## 🔍 Project Structure
+
+```
+message_flow/
+├── src/              # Main library code
+│   ├── app.rs        # Application initialization
+│   ├── context.rs    # Request context
+│   ├── error.rs      # Error types
+│   ├── handler.rs    # Register trait
+│   ├── message.rs    # Message trait
+│   ├── logger.rs     # Logging macros
+│   └── util.rs       # Utility macros
+├── drive/            # Procedural macros
+│   └── src/
+│       ├── attribute.rs  # Attribute parsing
+│       ├── handler.rs    # Handler analysis
+│       ├── msg_def.rs   # MsgDef derive
+│       ├── msg_flow.rs  # msg_flow attribute
+│       └── register.rs  # Registration codegen
+└── tests/            # Integration tests
+```
 
 ---
 
