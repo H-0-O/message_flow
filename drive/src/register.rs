@@ -1,3 +1,8 @@
+//! Code generation for handler registration
+//!
+//! This module generates the `Register` trait implementation that sets up subscriptions
+//! for all message handlers defined in a `#[msg_flow]` impl block.
+
 use std::collections::HashMap;
 
 use proc_macro2::TokenStream;
@@ -13,17 +18,28 @@ use crate::{
 };
 
 /// Represents the type of handler (Message or Event)
+///
+/// This enum distinguishes between request-reply message handlers and fire-and-forget
+/// event handlers. Currently, only `Message` handlers are fully implemented.
 #[derive(Debug, Clone, Copy)]
 pub enum HandlerType {
+    /// Request-reply message handler (sends a response)
     Message,
+    /// Fire-and-forget event handler (no response)
     Event,
 }
 
 /// Metadata about a handler function
+///
+/// This struct stores information about a handler function that is used during
+/// code generation to create the appropriate subscription and handler code.
 #[derive(Debug)]
 pub struct HandlerMetadata {
+    /// Whether this is a message or event handler
     pub handler_type: HandlerType,
+    /// The name of the handler function as a token stream
     pub function_name: proc_macro2::TokenStream,
+    /// Whether the handler function accepts a `Context` parameter
     pub has_context: bool,
 }
 
@@ -87,6 +103,35 @@ pub fn collect_handlers(
 }
 
 /// Generate the implementation of the Register trait
+///
+/// This function generates the complete `Register` trait implementation that:
+/// 1. Collects all handlers from the impl block
+/// 2. Creates subscriptions for each handler pattern
+/// 3. Spawns tasks to handle incoming messages concurrently
+///
+/// # Arguments
+///
+/// * `struct_name` - The name of the struct being implemented
+/// * `impl_block` - The impl block containing handler methods
+/// * `args` - The parsed `#[msg_flow]` attribute arguments
+///
+/// # Returns
+///
+/// Returns a `TokenStream` containing the generated `Register` trait implementation.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - The `Register` trait path cannot be parsed
+/// - Handler collection fails (e.g., duplicate patterns)
+///
+/// # Generated Code Structure
+///
+/// The generated code:
+/// 1. Implements `Register` for the struct
+/// 2. For each handler, creates a subscription and spawns a task
+/// 3. Each task deserializes incoming messages and calls the appropriate handler
+/// 4. Handles errors and sends responses back to the client
 pub fn generate_register_impl(
     struct_name: &syn::Ident,
     impl_block: &ItemImpl,
@@ -121,6 +166,25 @@ pub fn generate_register_impl(
 }
 
 /// Generate code for a single subscription/handler
+///
+/// This function generates the code for subscribing to a message pattern and
+/// handling incoming messages. It creates a spawned task that:
+/// 1. Subscribes to the topic pattern
+/// 2. Loops over incoming messages
+/// 3. Deserializes the message payload
+/// 4. Calls the appropriate handler function
+/// 5. Sends the response back (for message handlers)
+///
+/// # Arguments
+///
+/// * `struct_name` - The name of the struct containing the handler
+/// * `pattern` - The message pattern for this handler
+/// * `metadata` - Metadata about the handler function
+/// * `base_pattern` - The base pattern from `#[msg_flow(pattern = "...")]`
+///
+/// # Returns
+///
+/// Returns a `TokenStream` containing the subscription and handler code.
 fn generate_subscription_code(
     struct_name: &syn::Ident,
     pattern: &str,
@@ -174,6 +238,18 @@ fn generate_subscription_code(
 }
 
 /// Generate the reply block that sends responses back to the client
+///
+/// This function generates code that checks if a message has a reply subject
+/// and sends the response back to the client. This is used for request-reply
+/// message handlers.
+///
+/// # Arguments
+///
+/// * `struct_name` - The name of the struct (used for logging)
+///
+/// # Returns
+///
+/// Returns a `TokenStream` containing the reply sending code.
 fn generate_reply_block(struct_name: &syn::Ident) -> TokenStream {
     quote! {
         if let Some(reply) = msg.reply {
@@ -189,6 +265,22 @@ fn generate_reply_block(struct_name: &syn::Ident) -> TokenStream {
 }
 
 /// Generate handler code for message handlers (request-reply pattern)
+///
+/// This function generates code that:
+/// 1. Calls the handler function
+/// 2. Converts the result to a `Message` type
+/// 3. Handles errors by calling the error handler
+/// 4. Sends the response back to the client
+///
+/// # Arguments
+///
+/// * `function_name` - The name of the handler function
+/// * `inputs` - The input arguments for the handler (may include `&*context`)
+/// * `reply_block` - The code block that sends the reply
+///
+/// # Returns
+///
+/// Returns a `TokenStream` containing the message handler code.
 fn generate_message_handler(
     function_name: &TokenStream,
     inputs: &TokenStream,
@@ -207,6 +299,18 @@ fn generate_message_handler(
 }
 
 /// Generate handler code for event handlers (fire-and-forget pattern)
+///
+/// This function generates code that calls the event handler function without
+/// sending a response. This is used for fire-and-forget event patterns.
+///
+/// # Arguments
+///
+/// * `function_name` - The name of the handler function
+/// * `inputs` - The input arguments for the handler (may include `&*context`)
+///
+/// # Returns
+///
+/// Returns a `TokenStream` containing the event handler code.
 fn generate_event_handler(function_name: &TokenStream, inputs: &TokenStream) -> TokenStream {
     quote! {
         resolver.#function_name(#inputs).await;

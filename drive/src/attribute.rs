@@ -1,3 +1,8 @@
+//! Attribute parsing for handler functions
+//!
+//! This module provides types and functions for parsing attributes like `#[message]`
+//! and `#[event]` from handler function definitions.
+
 use darling::FromAttributes;
 use syn::Attribute;
 

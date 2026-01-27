@@ -1,3 +1,8 @@
+//! Handler function analysis and code generation
+//!
+//! This module provides utilities for analyzing handler function signatures and
+//! generating code to invoke them with the appropriate arguments.
+
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{punctuated::Punctuated, FnArg, Token, Type};

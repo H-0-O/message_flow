@@ -1,3 +1,8 @@
+//! Code generation for the `MsgDef` derive macro
+//!
+//! This module generates the `Message` trait implementation for structs that
+//! derive `MsgDef`.
+
 use quote::quote;
 use syn::{parse_str, ItemStruct};
 
@@ -6,6 +11,27 @@ use crate::{
     error::GeneratorResult,
 };
 
+/// Generate the `Message` trait implementation for a struct
+///
+/// This function takes a struct definition and generates code that implements
+/// the `message_flow::Message` trait for it.
+///
+/// # Arguments
+///
+/// * `input` - The struct definition parsed from the `#[derive(MsgDef)]` attribute
+///
+/// # Returns
+///
+/// Returns a `TokenStream` containing the generated trait implementation, or
+/// an error if code generation fails.
+///
+/// # Generated Code
+///
+/// Generates code like:
+/// ```rust,ignore
+/// #[automatically_derived]
+/// impl message_flow::Message for MyStruct {}
+/// ```
 pub fn generate(input: ItemStruct) -> GeneratorResult {
     let struct_name = &input.ident;
     let message_trait_path: syn::Path = parse_str(MESSAGE_TRAIT_PATH)?;
