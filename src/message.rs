@@ -76,6 +76,30 @@ impl<T: Message + Serialize + DeserializeOwned + Send> MessageSerialize for T {
 
 // Standard library types that implement Message
 impl Message for () {}
+impl Message for bool {}
+impl Message for i8 {}
+impl Message for i16 {}
+impl Message for i32 {}
+impl Message for i64 {}
+impl Message for i128 {}
+impl Message for isize {}
+impl Message for u8 {}
+impl Message for u16 {}
+impl Message for u32 {}
+impl Message for u64 {}
 impl Message for u128 {}
+impl Message for usize {}
+impl Message for f32 {}
+impl Message for f64 {}
+impl Message for char {}
 impl Message for String {}
-impl Message for Vec<String> {}
+impl Message for std::collections::HashMap<String, String> {}
+impl Message for std::collections::BTreeMap<String, String> {}
+impl Message for std::collections::HashSet<String> {}
+impl Message for std::collections::BTreeSet<String> {}
+impl<T: Message + Serialize + DeserializeOwned> Message for Option<T> {}
+impl<T: Message + Serialize + DeserializeOwned> Message for Vec<T> {}
+impl<T1: Message + Serialize + DeserializeOwned, T2: Message + Serialize + DeserializeOwned> Message for (T1, T2) {}
+impl<T1: Message + Serialize + DeserializeOwned, T2: Message + Serialize + DeserializeOwned, T3: Message + Serialize + DeserializeOwned> Message for (T1, T2, T3) {}
+impl<T1: Message + Serialize + DeserializeOwned, T2: Message + Serialize + DeserializeOwned, T3: Message + Serialize + DeserializeOwned, T4: Message + Serialize + DeserializeOwned> Message for (T1, T2, T3, T4) {}
+impl<T1: Message + Serialize + DeserializeOwned, T2: Message + Serialize + DeserializeOwned, T3: Message + Serialize + DeserializeOwned, T4: Message + Serialize + DeserializeOwned, T5: Message + Serialize + DeserializeOwned> Message for (T1, T2, T3, T4, T5) {}
