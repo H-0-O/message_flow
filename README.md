@@ -145,6 +145,9 @@ nats pub service_B.ss '{}'
 - 📊 Telemetry / metrics support  
 - 🌍 Pluggable message backends
 
+For detailed roadmap and development plans, see [ROADMAP.md](./ROADMAP.md)  
+For immediate tasks and bugs, see [TODO.md](./TODO.md)
+
 ---
 
 ## 📄 License
