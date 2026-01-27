@@ -1,14 +1,14 @@
-use darling::FromMeta;
-use quote::{quote};
-use syn::{self, ItemStruct};
+use quote::quote;
+use syn::{parse_str, ItemStruct};
 
-use crate::error::GeneratorResult;
+use crate::{
+    constants::MESSAGE_TRAIT_PATH,
+    error::GeneratorResult,
+};
 
-const MESSAGE_TRAIT_PATH: &str = "message_flow::Message";
-
-pub fn generate(__input: ItemStruct) -> GeneratorResult {
-    let struct_name = &__input.ident;
-    let message_trait_path = syn::Path::from_string(MESSAGE_TRAIT_PATH).unwrap();
+pub fn generate(input: ItemStruct) -> GeneratorResult {
+    let struct_name = &input.ident;
+    let message_trait_path: syn::Path = parse_str(MESSAGE_TRAIT_PATH)?;
     let expanded = quote! {
         #[automatically_derived]
         impl #message_trait_path for #struct_name {}

@@ -1,313 +1,71 @@
-use std::collections::HashMap;
-
-use darling::{FromAttributes, FromMeta};
-use quote::{quote, ToTokens};
-use syn::{FnArg, ImplItem, ItemImpl, Type};
+use quote::quote;
+use syn::{ImplItem, ItemImpl, Type};
 
 use crate::{
-    error::{AttributeParseError, GeneratorResult},
+    error::GeneratorResult,
+    register::generate_register_impl,
     MsgFlowArgs,
 };
 
-const REGISTER_TRAIT_PATH: &str = "message_flow::Register";
-
-#[derive(Debug)]
-enum Attributes {
-    Message(MessageAttribute),
-    Event(EventAttribute),
-}
-#[derive(Debug, FromAttributes)]
-#[darling(attributes(message))]
-struct MessageAttribute {
-    pattern: String,
-}
-
-#[derive(Debug, FromAttributes)]
-#[darling(attributes(event))]
-struct EventAttribute {
-    pattern: String,
-}
-
-impl Attributes {
-    fn from_attribute(attr: &syn::Attribute) -> Result<Self, syn::Error> {
-        if attr.path().is_ident("message") {
-            let parsed = MessageAttribute::from_attributes(&[attr.clone()])?;
-            if parsed.pattern.is_empty() {
-                return Err(syn::Error::new_spanned(
-                    attr,
-                    AttributeParseError::MessagePatternIsEmpty.to_string(),
-                ));
+/// Extract the struct name from an impl block
+///
+/// Returns an error if the impl block is not for a simple struct type.
+fn extract_struct_name(impl_block: &ItemImpl) -> Result<syn::Ident, syn::Error> {
+    match *impl_block.self_ty {
+        Type::Path(ref type_path) => {
+            if let Some(ident) = type_path.path.get_ident() {
+                Ok(ident.clone())
+            } else {
+                Err(syn::Error::new_spanned(
+                    type_path,
+                    "Expected an identifier for the struct name",
+                ))
             }
-            Ok(Attributes::Message(parsed))
-        } else if attr.path().is_ident("event") {
-            let parsed = EventAttribute::from_attributes(&[attr.clone()])?;
-            if parsed.pattern.is_empty() {
-                return Err(syn::Error::new_spanned(
-                    attr,
-                    AttributeParseError::EventPatternIsEmpty.to_string(),
-                ));
-            }
-            Ok(Attributes::Event(parsed))
-        } else {
-            return Err(syn::Error::new_spanned(
-                attr,
-                AttributeParseError::UnknownAttribute.to_string(),
-            ));
         }
+        _ => Err(syn::Error::new_spanned(
+            impl_block,
+            "Unsupported type for self_ty. Expected a simple struct type.",
+        )),
     }
 }
 
-pub fn generate(__input: ItemImpl, args: MsgFlowArgs) -> GeneratorResult {
-    let struct_name = match *__input.self_ty {
-        Type::Path(ref type_path) => {
-            if let Some(ident) = type_path.path.get_ident() {
-                ident.clone()
-            } else {
-                return Err(syn::Error::new_spanned(
-                    type_path,
-                    "Expected an identifier for the struct name",
-                ));
-            }
-        }
-        _ => {
-            return Err(syn::Error::new_spanned(
-                __input,
-                "Unsupported type for self_ty",
-            ))
-        }
-    };
-    let expanded_register_trait = match generate_impl_register_trait(&__input, &struct_name, &args)
-    {
-        Ok(token) => token,
-        Err(e) => return Err(e),
-    };
+/// Generate the complete code for a `#[msg_flow]` impl block
+///
+/// This generates:
+/// 1. The Register trait implementation
+/// 2. The original impl block with all methods preserved
+pub fn generate(impl_block: ItemImpl, args: MsgFlowArgs) -> GeneratorResult {
+    let struct_name = extract_struct_name(&impl_block)?;
 
-    // let expanded_handler_trait = generate_impl_handler_trait(&__input, &struct_name, &args)?;
+    let register_impl = generate_register_impl(&struct_name, &impl_block, &args)?;
 
-    let items = &__input.items;
-
-    let methods: Vec<proc_macro2::TokenStream> = items
+    // Preserve all original methods from the impl block
+    let methods: Vec<proc_macro2::TokenStream> = impl_block
+        .items
         .iter()
         .map(|item| {
             if let ImplItem::Fn(func) = item {
                 let func_sig = &func.sig;
                 let func_body = &func.block;
-                return quote! {
-                   #func_sig {
-                       #func_body
-                   }
-                };
-            };
-
-            quote! {}
+                quote! {
+                    #func_sig {
+                        #func_body
+                    }
+                }
+            } else {
+                quote! {}
+            }
         })
         .collect();
 
     Ok(quote! {
-
         const _: () = {
-
-            #expanded_register_trait
-
-
+            #register_impl
 
             impl #struct_name {
                 #(#methods)*
             }
         };
-
     }
     .into())
-}
-
-#[derive(Debug)]
-enum MacroType {
-    Message,
-    Event,
-}
-#[derive(Debug)]
-struct AttrMacro {
-    macro_type: MacroType,
-    invokable_function: proc_macro2::TokenStream,
-    invokable_has_ctx: bool,
-}
-
-fn generate_impl_register_trait(
-    __input: &ItemImpl,
-    struct_name: &syn::Ident,
-    args: &MsgFlowArgs,
-) -> GeneratorResult {
-    let register_trait_path = syn::Path::from_string(REGISTER_TRAIT_PATH).unwrap();
-
-    let base_pattern = match &args.pattern {
-        Some(pattern) => format!("{}.", pattern),
-        None => "".into(),
-    };
-    // the Key is pattern defined by user
-    let mut macros: HashMap<String, AttrMacro> = HashMap::new();
-
-    for item in &__input.items {
-        if let ImplItem::Fn(func) = item {
-            let func_name = &func.sig.ident;
-            let has_ctx = func.sig.inputs.iter().any(|f| {
-                match f {
-                    FnArg::Receiver(_) => false, // means the argument is self
-                    FnArg::Typed(t) => {
-                        let inner_ty = match t.ty.as_ref() {
-                            syn::Type::Reference(r) => r.elem.as_ref(),
-                            other => other,
-                        };
-
-                        if let syn::Type::Path(pa) = inner_ty {
-                            let ty_str = pa
-                                .path
-                                .segments
-                                .iter()
-                                .map(|seg| seg.ident.to_string())
-                                .collect::<Vec<_>>()
-                                .join("::");
-                            ty_str == "Context" || ty_str == "message_flow::Context"
-                        } else {
-                            false
-                        }
-                    }
-                }
-            });
-            for attr in &func.attrs {
-                match Attributes::from_attribute(&attr) {
-                    //TODO here must do some validations
-                    Ok(Attributes::Message(message)) => {
-                        if !macros.contains_key(&message.pattern) {
-                            macros.insert(
-                                message.pattern.clone(),
-                                AttrMacro {
-                                    macro_type: MacroType::Message,
-                                    invokable_function: quote! {},
-                                    invokable_has_ctx: has_ctx,
-                                },
-                            );
-                        }
-                        macros.get_mut(&message.pattern).unwrap().invokable_function = {
-                            quote! {
-                                    #func_name
-                            }
-                        };
-                    }
-                    Ok(Attributes::Event(event)) => {
-                        if !macros.contains_key(&event.pattern) {
-                            macros.insert(
-                                event.pattern.clone(),
-                                AttrMacro {
-                                    macro_type: MacroType::Event,
-                                    invokable_function: quote! {},
-                                    invokable_has_ctx: has_ctx,
-                                },
-                            );
-                        }
-
-                        macros.get_mut(&event.pattern).unwrap().invokable_function = {
-                            quote! {
-                                    #func_name
-                            }
-                        };
-                    }
-                    Err(err) => return Err(err),
-                }
-            }
-        }
-    }
-
-    let messages_token_stream: Vec<proc_macro2::TokenStream> = macros
-        .iter()
-        .map(|(pattern, macro_attr)| {
-            let function_to_invoke = &macro_attr.invokable_function;
-            let topic_pattern = format!("{}{}", base_pattern, pattern);
-
-            let reply_block = quote! {
-                if let Some(reply) = msg.reply {
-                    message_flow::logger::info_log!(
-                        "Sending reply for struct {}: {:?}",
-                        stringify!(#struct_name),
-                        reply
-                    );
-                    let byte_response = bytes::Bytes::from(response.to_json());
-                    let _ = client.publish(reply, byte_response).await?;
-                }
-            };
-
-            let inputs = if macro_attr.invokable_has_ctx {
-                quote! {
-                    &*context
-                }
-            }else {
-                quote! {}
-            };
-
-            let handler = match macro_attr.macro_type {
-                MacroType::Message => {
-                    quote! {
-                        let result = resolver.#function_to_invoke(#inputs).await;
-
-                        let response: ::std::boxed::Box<dyn message_flow::Message> = match result {
-                            Ok(val) => ::std::boxed::Box::new(val),
-                            Err(_err) => (context.error_handler)(500 , _err.to_string() , client),
-                        };
-
-                        #reply_block
-                    }
-                }
-                MacroType::Event => {
-                    quote! {
-                        resolver.#function_to_invoke(#inputs).await
-                    }
-                }
-            };
-
-            quote! {
-                tokio::spawn({
-                    let context = context.clone();
-                    async move {
-                        let client = &context.client;
-                        let mut subscription = client.subscribe(#topic_pattern).await?;
-
-                        message_flow::logger::info_log!(
-                            "Spawned task for struct {}",
-                            stringify!(#struct_name)
-                        );
-
-                        while let Some(msg) = subscription.next().await {
-                            message_flow::logger::info_log!(
-                                "Received request for struct {}: {:?}",
-                                stringify!(#struct_name),
-                                msg
-                            );
-
-                            match serde_json::from_slice::<#struct_name>(msg.payload.as_ref()) {
-                                Ok(resolver) => {
-                                    #handler
-                                }
-                                Err(_error) => {
-                                    let response = (context.error_handler)(422 , _error.to_string() , client);
-                                    #reply_block
-                                }
-                            }
-                        }
-
-                        Ok::<(), async_nats::Error>(())
-                    }
-                });
-            }
-        })
-        .collect();
-
-    Ok(quote! {
-        #[automatically_derived]
-        #[message_flow::async_trait]
-        impl #register_trait_path for #struct_name {
-            async fn register(context: std::sync::Arc<message_flow::Context>) -> message_flow::Result<()> {
-                #(#messages_token_stream)*
-                Ok(())
-            }
-        }
-    })
 }

@@ -4,10 +4,18 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::parse_macro_input;
 
+mod attribute;
+mod constants;
 mod error;
+mod handler;
 mod msg_def;
 mod msg_flow;
+mod register;
 
+/// Parse nested meta attributes using darling
+///
+/// This macro simplifies parsing attribute arguments for proc macros.
+/// It handles errors by converting them to compile errors.
 macro_rules! parse_nested_meta {
     ($ty:ty, $args:expr) => {{
         let meta = match darling::ast::NestedMeta::parse_meta_list($args.into()) {
