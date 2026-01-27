@@ -94,7 +94,16 @@ This document outlines the planned features, improvements, and milestones for th
 **Priority:** High  
 **Estimated Effort:** 5-7 days
 
-#### 6. Authentication & Authorization
+#### 6. Dynamic Schema Support
+- [ ] Support "dynamic schema" message types using empty marker structs with `#[derive(MsgDef)]` (e.g. `struct Dynamic;`)
+- [ ] Allow `#[msg_flow]` impl blocks on these marker types with non‑`self` handlers (no parsed input), forwarding the raw JSON payload from the client
+- [ ] Enforce at compile time that dynamic handlers return `Result<..>` (or adapt generated code accordingly), and emit clear errors otherwise
+- [ ] Document dynamic vs static schemas and provide examples (e.g. `Dynamic.greeting` that receives raw JSON)
+
+**Priority:** Medium  
+**Estimated Effort:** 3-4 days
+
+#### 7. Authentication & Authorization
 - [ ] Design auth hook system
 - [ ] Support JWT validation
 - [ ] API key authentication
@@ -105,7 +114,7 @@ This document outlines the planned features, improvements, and milestones for th
 **Priority:** High  
 **Estimated Effort:** 5-6 days
 
-#### 7. Request/Response Interceptors
+#### 8. Request/Response Interceptors
 - [ ] Pre-handler interceptors
 - [ ] Post-handler interceptors
 - [ ] Error interceptors
