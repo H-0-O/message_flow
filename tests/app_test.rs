@@ -1,7 +1,6 @@
 use message_flow::{app::App, DefaultResponseErrorSchema, Message};
 
 #[tokio::test]
-#[ignore] // Requires NATS server
 async fn test_app_new_with_valid_address() {
     let app_result = App::new("localhost:4222".to_string()).await;
     
@@ -41,7 +40,6 @@ fn test_error_handler_customization() {
 }
 
 #[tokio::test]
-#[ignore] // Requires NATS server
 async fn test_app_set_error_handler() {
     let app_result = App::new("localhost:4222".to_string()).await;
     

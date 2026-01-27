@@ -32,7 +32,6 @@ async fn test_app_creation() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn test_message_serialization_integration() {
     let request = TestRequest {
         message: "Hello from integration test".to_string(),
