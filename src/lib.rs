@@ -9,6 +9,7 @@ mod handler;
 mod message;
 
 pub use context::Context;
+pub use error::DefaultResponseErrorSchema;
 pub use handler::Register;
 pub use message::Message;
 pub use result::Result;
