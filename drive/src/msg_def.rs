@@ -30,14 +30,22 @@ use crate::{
 /// Generates code like:
 /// ```rust,ignore
 /// #[automatically_derived]
-/// impl message_flow::Message for MyStruct {}
+/// impl message_flow::Message for MyStruct {
+///     const IS_UNIT: bool = true; // or false
+/// }
 /// ```
 pub fn generate(input: ItemStruct) -> GeneratorResult {
     let struct_name = &input.ident;
     let message_trait_path: syn::Path = parse_str(MESSAGE_TRAIT_PATH)?;
+    
+    // Detect if struct is unit-like (no fields)
+    let is_unit = matches!(input.fields, syn::Fields::Unit);
+    
     let expanded = quote! {
         #[automatically_derived]
-        impl #message_trait_path for #struct_name {}
+        impl #message_trait_path for #struct_name {
+            const IS_UNIT: bool = #is_unit;
+        }
     };
 
     Ok(expanded.into())

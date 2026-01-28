@@ -7,7 +7,7 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{punctuated::Punctuated, FnArg, Token, Type};
 
-use crate::constants::{CONTEXT_FULL_PATH, CONTEXT_TYPE_NAME};
+use crate::constants::{CONTEXT_FULL_PATH, CONTEXT_TYPE_NAME, SERDE_JSON_VALUE_PATH};
 
 /// Check if a function has a Context parameter
 ///
@@ -40,10 +40,56 @@ pub fn has_context_parameter(inputs: &Punctuated<FnArg, Token![,]>) -> bool {
     })
 }
 
+/// Check if a function has a `serde_json::Value` parameter
+///
+/// This function examines the function signature to determine if it takes
+/// a `serde_json::Value` or `&serde_json::Value` parameter.
+pub fn has_json_value_parameter(inputs: &Punctuated<FnArg, Token![,]>) -> bool {
+    inputs.iter().any(|input| {
+        match input {
+            FnArg::Receiver(_) => false, // `self` parameter
+            FnArg::Typed(typed) => {
+                let inner_ty = match typed.ty.as_ref() {
+                    Type::Reference(ref_ref) => ref_ref.elem.as_ref(),
+                    other => other,
+                };
+
+                if let Type::Path(type_path) = inner_ty {
+                    let type_string = type_path
+                        .path
+                        .segments
+                        .iter()
+                        .map(|seg| seg.ident.to_string())
+                        .collect::<Vec<_>>()
+                        .join("::");
+                    type_string == SERDE_JSON_VALUE_PATH || type_string == "Value"
+                } else {
+                    false
+                }
+            }
+        }
+    })
+}
+
+/// Check if a function has a `&self` parameter
+///
+/// This function examines the function signature to determine if it takes
+/// a `&self` receiver parameter.
+pub fn has_self_parameter(inputs: &Punctuated<FnArg, Token![,]>) -> bool {
+    inputs.iter().any(|input| {
+        if let FnArg::Receiver(receiver) = input {
+            receiver.reference.is_some()
+        } else {
+            false
+        }
+    })
+}
+
 /// Generate the input arguments for invoking a handler function
 ///
 /// If the handler has a Context parameter, this generates `&*context`,
 /// otherwise it generates an empty token stream.
+#[allow(dead_code)]
 pub fn generate_handler_inputs(has_ctx: bool) -> TokenStream {
     if has_ctx {
         quote! { &*context }

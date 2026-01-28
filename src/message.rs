@@ -38,6 +38,19 @@ use serde::{Serialize, de::DeserializeOwned};
 /// let json = response.to_json();
 /// ```
 pub trait Message: MessageSerialize + Send + Debug {
+    /// Indicates whether this message type is a unit-like struct (no fields).
+    ///
+    /// - `true` for unit-like structs (e.g., `struct MyMessage;`)
+    /// - `false` for data-bearing structs (e.g., `struct MyMessage { field: String }`)
+    ///
+    /// This constant is used to determine whether to deserialize the message into
+    /// a struct or pass raw JSON as `serde_json::Value` to handlers.
+    ///
+    /// Note: This is a const associated item for compile-time evaluation.
+    /// It cannot be accessed through trait objects, but can be used with
+    /// `<Type as Message>::IS_UNIT` syntax.
+    const IS_UNIT: bool;
+
     /// Serialize the message to a JSON string
     ///
     /// This method converts the message to a JSON string representation that can
@@ -75,31 +88,87 @@ impl<T: Message + Serialize + DeserializeOwned + Send> MessageSerialize for T {
 }
 
 // Standard library types that implement Message
-impl Message for () {}
-impl Message for bool {}
-impl Message for i8 {}
-impl Message for i16 {}
-impl Message for i32 {}
-impl Message for i64 {}
-impl Message for i128 {}
-impl Message for isize {}
-impl Message for u8 {}
-impl Message for u16 {}
-impl Message for u32 {}
-impl Message for u64 {}
-impl Message for u128 {}
-impl Message for usize {}
-impl Message for f32 {}
-impl Message for f64 {}
-impl Message for char {}
-impl Message for String {}
-impl Message for std::collections::HashMap<String, String> {}
-impl Message for std::collections::BTreeMap<String, String> {}
-impl Message for std::collections::HashSet<String> {}
-impl Message for std::collections::BTreeSet<String> {}
-impl<T: Message + Serialize + DeserializeOwned> Message for Option<T> {}
-impl<T: Message + Serialize + DeserializeOwned> Message for Vec<T> {}
-impl<T1: Message + Serialize + DeserializeOwned, T2: Message + Serialize + DeserializeOwned> Message for (T1, T2) {}
-impl<T1: Message + Serialize + DeserializeOwned, T2: Message + Serialize + DeserializeOwned, T3: Message + Serialize + DeserializeOwned> Message for (T1, T2, T3) {}
-impl<T1: Message + Serialize + DeserializeOwned, T2: Message + Serialize + DeserializeOwned, T3: Message + Serialize + DeserializeOwned, T4: Message + Serialize + DeserializeOwned> Message for (T1, T2, T3, T4) {}
-impl<T1: Message + Serialize + DeserializeOwned, T2: Message + Serialize + DeserializeOwned, T3: Message + Serialize + DeserializeOwned, T4: Message + Serialize + DeserializeOwned, T5: Message + Serialize + DeserializeOwned> Message for (T1, T2, T3, T4, T5) {}
+impl Message for () {
+    const IS_UNIT: bool = true;
+}
+impl Message for bool {
+    const IS_UNIT: bool = false;
+}
+impl Message for i8 {
+    const IS_UNIT: bool = false;
+}
+impl Message for i16 {
+    const IS_UNIT: bool = false;
+}
+impl Message for i32 {
+    const IS_UNIT: bool = false;
+}
+impl Message for i64 {
+    const IS_UNIT: bool = false;
+}
+impl Message for i128 {
+    const IS_UNIT: bool = false;
+}
+impl Message for isize {
+    const IS_UNIT: bool = false;
+}
+impl Message for u8 {
+    const IS_UNIT: bool = false;
+}
+impl Message for u16 {
+    const IS_UNIT: bool = false;
+}
+impl Message for u32 {
+    const IS_UNIT: bool = false;
+}
+impl Message for u64 {
+    const IS_UNIT: bool = false;
+}
+impl Message for u128 {
+    const IS_UNIT: bool = false;
+}
+impl Message for usize {
+    const IS_UNIT: bool = false;
+}
+impl Message for f32 {
+    const IS_UNIT: bool = false;
+}
+impl Message for f64 {
+    const IS_UNIT: bool = false;
+}
+impl Message for char {
+    const IS_UNIT: bool = false;
+}
+impl Message for String {
+    const IS_UNIT: bool = false;
+}
+impl Message for std::collections::HashMap<String, String> {
+    const IS_UNIT: bool = false;
+}
+impl Message for std::collections::BTreeMap<String, String> {
+    const IS_UNIT: bool = false;
+}
+impl Message for std::collections::HashSet<String> {
+    const IS_UNIT: bool = false;
+}
+impl Message for std::collections::BTreeSet<String> {
+    const IS_UNIT: bool = false;
+}
+impl<T: Message + Serialize + DeserializeOwned> Message for Option<T> {
+    const IS_UNIT: bool = false;
+}
+impl<T: Message + Serialize + DeserializeOwned> Message for Vec<T> {
+    const IS_UNIT: bool = false;
+}
+impl<T1: Message + Serialize + DeserializeOwned, T2: Message + Serialize + DeserializeOwned> Message for (T1, T2) {
+    const IS_UNIT: bool = false;
+}
+impl<T1: Message + Serialize + DeserializeOwned, T2: Message + Serialize + DeserializeOwned, T3: Message + Serialize + DeserializeOwned> Message for (T1, T2, T3) {
+    const IS_UNIT: bool = false;
+}
+impl<T1: Message + Serialize + DeserializeOwned, T2: Message + Serialize + DeserializeOwned, T3: Message + Serialize + DeserializeOwned, T4: Message + Serialize + DeserializeOwned> Message for (T1, T2, T3, T4) {
+    const IS_UNIT: bool = false;
+}
+impl<T1: Message + Serialize + DeserializeOwned, T2: Message + Serialize + DeserializeOwned, T3: Message + Serialize + DeserializeOwned, T4: Message + Serialize + DeserializeOwned, T5: Message + Serialize + DeserializeOwned> Message for (T1, T2, T3, T4, T5) {
+    const IS_UNIT: bool = false;
+}

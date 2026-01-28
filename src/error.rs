@@ -29,4 +29,6 @@ pub struct DefaultResponseErrorSchema {
     pub message: String,
 }
 
-impl Message for DefaultResponseErrorSchema {}
+impl Message for DefaultResponseErrorSchema {
+    const IS_UNIT: bool = false;
+}

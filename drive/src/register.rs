@@ -13,7 +13,7 @@ use crate::{
     attribute::AttributeType,
     constants::REGISTER_TRAIT_PATH,
     error::GeneratorResult,
-    handler::{generate_handler_inputs, has_context_parameter},
+    handler::{has_context_parameter, has_json_value_parameter, has_self_parameter},
     MsgFlowArgs,
 };
 
@@ -41,6 +41,10 @@ pub struct HandlerMetadata {
     pub function_name: proc_macro2::TokenStream,
     /// Whether the handler function accepts a `Context` parameter
     pub has_context: bool,
+    /// Whether the handler function accepts a `serde_json::Value` parameter
+    pub has_json_value: bool,
+    /// Whether the handler function has a `&self` parameter
+    pub has_self: bool,
 }
 
 /// Collect all handlers from an impl block
@@ -58,6 +62,8 @@ pub fn collect_handlers(
         if let ImplItem::Fn(func) = item {
             let func_name = &func.sig.ident;
             let has_ctx = has_context_parameter(&func.sig.inputs);
+            let has_json_value = has_json_value_parameter(&func.sig.inputs);
+            let has_self = has_self_parameter(&func.sig.inputs);
 
             for attr in &func.attrs {
                 let attribute_type = match AttributeType::from_attribute(attr) {
@@ -93,6 +99,8 @@ pub fn collect_handlers(
                         handler_type,
                         function_name: quote! { #func_name },
                         has_context: has_ctx,
+                        has_json_value,
+                        has_self,
                     },
                 );
             }
@@ -193,12 +201,19 @@ fn generate_subscription_code(
 ) -> TokenStream {
     let topic_pattern = format!("{}{}", base_pattern, pattern);
     let function_name = &metadata.function_name;
-    let handler_inputs = generate_handler_inputs(metadata.has_context);
 
     let reply_block = generate_reply_block(struct_name);
+
+    // Generate handler code based on the detected handler signature
+    // - `&self` present  → static schema (deserialize into struct and call method)
+    // - `serde_json::Value` present → dynamic schema (pass raw JSON value)
     let handler_code = match metadata.handler_type {
-        HandlerType::Message => generate_message_handler(function_name, &handler_inputs, &reply_block),
-        HandlerType::Event => generate_event_handler(function_name, &handler_inputs),
+        HandlerType::Message => {
+            generate_message_handler_conditional(struct_name, function_name, metadata, &reply_block)
+        }
+        HandlerType::Event => {
+            generate_event_handler_conditional(struct_name, function_name, metadata)
+        }
     };
 
     quote! {
@@ -220,15 +235,7 @@ fn generate_subscription_code(
                         msg
                     );
 
-                    match serde_json::from_slice::<#struct_name>(msg.payload.as_ref()) {
-                        Ok(resolver) => {
-                            #handler_code
-                        }
-                        Err(_error) => {
-                            let response = (context.error_handler)(422, _error.to_string(), client);
-                            #reply_block
-                        }
-                    }
+                    #handler_code
                 }
 
                 Ok::<(), async_nats::Error>(())
@@ -258,62 +265,164 @@ fn generate_reply_block(struct_name: &syn::Ident) -> TokenStream {
                 stringify!(#struct_name),
                 reply
             );
-            let byte_response = bytes::Bytes::from(response.to_json());
+            let byte_response = bytes::Bytes::from(body);
             let _ = client.publish(reply, byte_response).await?;
         }
     }
 }
 
-/// Generate handler code for message handlers (request-reply pattern)
+/// Generate handler code for message handlers
 ///
-/// This function generates code that:
-/// 1. Calls the handler function
-/// 2. Converts the result to a `Message` type
-/// 3. Handles errors by calling the error handler
-/// 4. Sends the response back to the client
+/// This function generates code based on the handler signature:
+/// - If the handler has `&self`, it is treated as a static schema handler:
+///   the payload is deserialized into the struct and the method is called on `self`.
+/// - If the handler has a `serde_json::Value` parameter and no `&self`, it is treated
+///   as a dynamic schema handler: the payload is deserialized into `serde_json::Value`
+///   and passed to an associated function on the struct.
 ///
-/// # Arguments
-///
-/// * `function_name` - The name of the handler function
-/// * `inputs` - The input arguments for the handler (may include `&*context`)
-/// * `reply_block` - The code block that sends the reply
-///
-/// # Returns
-///
-/// Returns a `TokenStream` containing the message handler code.
-fn generate_message_handler(
+/// Any other combination (both `&self` and `serde_json::Value`, or neither) will
+/// result in a compile-time error via `compile_error!`.
+fn generate_message_handler_conditional(
+    struct_name: &syn::Ident,
     function_name: &TokenStream,
-    inputs: &TokenStream,
+    metadata: &HandlerMetadata,
     reply_block: &TokenStream,
 ) -> TokenStream {
-    quote! {
-        let result = resolver.#function_name(#inputs).await;
-
-        let response: ::std::boxed::Box<dyn message_flow::Message> = match result {
-            Ok(val) => ::std::boxed::Box::new(val),
-            Err(_err) => (context.error_handler)(500, _err.to_string(), client),
-        };
-
-        #reply_block
+    match (metadata.has_self, metadata.has_json_value) {
+        // Static schema: method on &self
+        (true, false) => {
+            if metadata.has_context {
+                quote! {
+                    match serde_json::from_slice::<#struct_name>(msg.payload.as_ref()) {
+                        Ok(resolver) => {
+                            let result = resolver.#function_name(&*context).await;
+                            let body = match result {
+                                Ok(val) => val.to_json(),
+                                Err(_err) => (context.error_handler)(500, _err.to_string(), client).to_json(),
+                            };
+                            #reply_block
+                        }
+                        Err(_error) => {
+                            let body = (context.error_handler)(422, _error.to_string(), client).to_json();
+                            #reply_block
+                        }
+                    }
+                }
+            } else {
+                quote! {
+                    match serde_json::from_slice::<#struct_name>(msg.payload.as_ref()) {
+                        Ok(resolver) => {
+                            let result = resolver.#function_name().await;
+                            let body = match result {
+                                Ok(val) => val.to_json(),
+                                Err(_err) => (context.error_handler)(500, _err.to_string(), client).to_json(),
+                            };
+                            #reply_block
+                        }
+                        Err(_error) => {
+                            let body = (context.error_handler)(422, _error.to_string(), client).to_json();
+                            #reply_block
+                        }
+                    }
+                }
+            }
+        }
+        // Dynamic schema: associated function taking serde_json::Value
+        (false, true) => {
+            if metadata.has_context {
+                quote! {
+                    match serde_json::from_slice::<serde_json::Value>(msg.payload.as_ref()) {
+                        Ok(input_value) => {
+                            let result = <#struct_name>::#function_name(&*context, input_value).await;
+                            let body = match result {
+                                Ok(val) => val.to_json(),
+                                Err(_err) => (context.error_handler)(500, _err.to_string(), client).to_json(),
+                            };
+                            #reply_block
+                        }
+                        Err(_error) => {
+                            let body = (context.error_handler)(422, _error.to_string(), client).to_json();
+                            #reply_block
+                        }
+                    }
+                }
+            } else {
+                quote! {
+                    match serde_json::from_slice::<serde_json::Value>(msg.payload.as_ref()) {
+                        Ok(input_value) => {
+                            let result = <#struct_name>::#function_name(input_value).await;
+                            let body = match result {
+                                Ok(val) => val.to_json(),
+                                Err(_err) => (context.error_handler)(500, _err.to_string(), client).to_json(),
+                            };
+                            #reply_block
+                        }
+                        Err(_error) => {
+                            let body = (context.error_handler)(422, _error.to_string(), client).to_json();
+                            #reply_block
+                        }
+                    }
+                }
+            }
+        }
+        // Invalid combinations: generate a compile error in user code
+        _ => quote! {
+            compile_error!(
+                "Invalid handler signature: use either `&self` (static schema) \
+                 or `serde_json::Value` parameter (dynamic schema), but not both"
+            );
+        },
     }
 }
 
-/// Generate handler code for event handlers (fire-and-forget pattern)
+/// Generate handler code for event handlers
 ///
-/// This function generates code that calls the event handler function without
-/// sending a response. This is used for fire-and-forget event patterns.
-///
-/// # Arguments
-///
-/// * `function_name` - The name of the handler function
-/// * `inputs` - The input arguments for the handler (may include `&*context`)
-///
-/// # Returns
-///
-/// Returns a `TokenStream` containing the event handler code.
-fn generate_event_handler(function_name: &TokenStream, inputs: &TokenStream) -> TokenStream {
-    quote! {
-        resolver.#function_name(#inputs).await;
+/// This mirrors `generate_message_handler_conditional` but without reply handling.
+fn generate_event_handler_conditional(
+    struct_name: &syn::Ident,
+    function_name: &TokenStream,
+    metadata: &HandlerMetadata,
+) -> TokenStream {
+    match (metadata.has_self, metadata.has_json_value) {
+        // Static schema: method on &self
+        (true, false) => {
+            if metadata.has_context {
+                quote! {
+                    if let Ok(resolver) = serde_json::from_slice::<#struct_name>(msg.payload.as_ref()) {
+                        resolver.#function_name(&*context).await;
+                    }
+                }
+            } else {
+                quote! {
+                    if let Ok(resolver) = serde_json::from_slice::<#struct_name>(msg.payload.as_ref()) {
+                        resolver.#function_name().await;
+                    }
+                }
+            }
+        }
+        // Dynamic schema: associated function taking serde_json::Value
+        (false, true) => {
+            if metadata.has_context {
+                quote! {
+                    if let Ok(input_value) = serde_json::from_slice::<serde_json::Value>(msg.payload.as_ref()) {
+                        <#struct_name>::#function_name(&*context, input_value).await;
+                    }
+                }
+            } else {
+                quote! {
+                    if let Ok(input_value) = serde_json::from_slice::<serde_json::Value>(msg.payload.as_ref()) {
+                        <#struct_name>::#function_name(input_value).await;
+                    }
+                }
+            }
+        }
+        // Invalid combinations: generate a compile error in user code
+        _ => quote! {
+            compile_error!(
+                "Invalid handler signature: use either `&self` (static schema) \
+                 or `serde_json::Value` parameter (dynamic schema), but not both"
+            );
+        },
     }
 }
 

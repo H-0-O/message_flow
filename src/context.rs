@@ -3,7 +3,7 @@
 //! The [`Context`] struct provides access to the message broker client and error
 //! handling functionality for message handlers.
 
-use crate::{Message, error::DefaultResponseErrorSchema};
+use crate::error::DefaultResponseErrorSchema;
 use async_nats::Client;
 
 /// Type alias for error handler functions
@@ -13,8 +13,11 @@ use async_nats::Client;
 /// - `message`: Error message string
 /// - `client`: Reference to the NATS client (for potential custom error handling)
 ///
-/// The handler must return a boxed `Message` that will be sent as the error response.
-pub type ErrorHandler = fn(code: u16, message: String, client: &Client) -> Box<dyn Message>;
+/// The handler must return a boxed error response that can be serialized.
+/// 
+/// Note: Due to `Message` having an associated const (`IS_UNIT`), it is not object-safe.
+/// We use a concrete type (`DefaultResponseErrorSchema`) for error responses, which implements `Message`.
+pub type ErrorHandler = fn(code: u16, message: String, client: &Client) -> DefaultResponseErrorSchema;
 
 /// Application context passed to message handlers
 ///
@@ -66,11 +69,10 @@ impl Context {
     pub fn new(client: Client) -> Context {
         Context {
             error_handler: |code, message, _client| {
-                let error_response = DefaultResponseErrorSchema {
+                DefaultResponseErrorSchema {
                     code,
                     message: message,
-                };
-                return Box::new(error_response);
+                }
             },
             client: client,
         }

@@ -47,11 +47,10 @@ async fn test_app_set_error_handler() {
         Ok(app) => {
             // Test setting a custom error handler
             let _app_with_handler = app.set_error_handler(|code, message, _client| {
-                let error = DefaultResponseErrorSchema {
+                DefaultResponseErrorSchema {
                     code,
                     message: format!("Custom: {}", message),
-                };
-                Box::new(error)
+                }
             });
             
             // Verify the method chains correctly
