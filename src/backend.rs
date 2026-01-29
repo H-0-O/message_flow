@@ -116,7 +116,7 @@ pub async fn publish_reply(context: &Context, reply: &str, body: Bytes) -> Broke
 
     #[cfg(feature = "rabbitmq")]
     {
-        use lapin::{options::*, BasicProperties};
+        use lapin::{BasicProperties, options::*};
 
         let channel = &context.client;
         channel
@@ -133,5 +133,3 @@ pub async fn publish_reply(context: &Context, reply: &str, body: Bytes) -> Broke
         Ok(())
     }
 }
-
-

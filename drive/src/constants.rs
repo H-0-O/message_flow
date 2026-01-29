@@ -17,4 +17,3 @@ pub const CONTEXT_FULL_PATH: &str = "message_flow::Context";
 
 /// Full path to `serde_json::Value` type
 pub const SERDE_JSON_VALUE_PATH: &str = "serde_json::Value";
-

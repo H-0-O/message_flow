@@ -1,4 +1,4 @@
-use message_flow::{registers, Register, RegisterFn, Context, Result};
+use message_flow::{Context, Register, RegisterFn, Result, registers};
 use std::sync::Arc;
 
 // Mock handler structs for testing
@@ -30,7 +30,7 @@ impl Register for TestHandler2 {
 async fn test_registers_macro() {
     // Test that registers! macro compiles and creates the correct type
     let _registers: &[RegisterFn] = registers!(TestHandler1, TestHandler2);
-    
+
     // Verify it's a slice of RegisterFn
     assert_eq!(_registers.len(), 2);
 }
@@ -52,9 +52,8 @@ async fn test_registers_macro_empty() {
 async fn test_register_fn_type() {
     // Test that RegisterFn is the correct type
     let registers: &[RegisterFn] = registers!(TestHandler1);
-    
+
     // Verify we can call the function
     // Note: This would require a real Context, so we'll just verify the type
     assert_eq!(registers.len(), 1);
 }
-

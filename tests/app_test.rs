@@ -1,9 +1,9 @@
-use message_flow::{app::App, DefaultResponseErrorSchema, Message};
+use message_flow::{DefaultResponseErrorSchema, Message, app::App};
 
 #[tokio::test]
 async fn test_app_new_with_valid_address() {
     let app_result = App::new("localhost:4222".to_string()).await;
-    
+
     match app_result {
         Ok(_app) => {
             // Verify app was created
@@ -21,7 +21,7 @@ async fn test_app_new_with_valid_address() {
 async fn test_app_new_with_invalid_address() {
     // Test with an invalid address - should fail
     let app_result = App::new("invalid:9999".to_string()).await;
-    
+
     // Should return an error
     assert!(app_result.is_err());
 }
@@ -33,7 +33,7 @@ fn test_error_handler_customization() {
         code: 999,
         message: "Custom error".to_string(),
     };
-    
+
     let json = custom_error.to_json();
     assert!(json.contains("999"));
     assert!(json.contains("Custom error"));
@@ -42,17 +42,16 @@ fn test_error_handler_customization() {
 #[tokio::test]
 async fn test_app_set_error_handler() {
     let app_result = App::new("localhost:4222".to_string()).await;
-    
+
     match app_result {
         Ok(app) => {
             // Test setting a custom error handler
-            let _app_with_handler = app.set_error_handler(|code, message, _client| {
-                DefaultResponseErrorSchema {
+            let _app_with_handler =
+                app.set_error_handler(|code, message, _client| DefaultResponseErrorSchema {
                     code,
                     message: format!("Custom: {}", message),
-                }
-            });
-            
+                });
+
             // Verify the method chains correctly
             assert!(true); // If we get here, it worked
         }
@@ -61,4 +60,3 @@ async fn test_app_set_error_handler() {
         }
     }
 }
-

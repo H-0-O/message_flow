@@ -4,7 +4,6 @@
 
 use std::{future::Future, pin::Pin, sync::Arc};
 
-
 use crate::{Context, Result};
 
 /// Function pointer type for handler registration functions

@@ -40,7 +40,7 @@ use crate::{RegisterFn, context::Context, logger};
 /// ```
 pub struct App {
     /// The application context containing the broker client and error handler
-    pub context: Context
+    pub context: Context,
 }
 
 impl App {
@@ -91,13 +91,13 @@ impl App {
 
         #[cfg(feature = "rabbitmq")]
         {
-            use lapin::{options::*, Connection, ConnectionProperties};
+            use lapin::{Connection, ConnectionProperties, options::*};
 
             let connection = Connection::connect(&addr, ConnectionProperties::default()).await?;
             let channel = connection.create_channel().await?;
-        let app = App {
+            let app = App {
                 context: Context::new(channel),
-        };
+            };
             return Ok(app);
         }
 

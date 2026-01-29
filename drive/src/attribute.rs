@@ -81,4 +81,3 @@ impl AttributeType {
         matches!(self, AttributeType::Event(_))
     }
 }
-

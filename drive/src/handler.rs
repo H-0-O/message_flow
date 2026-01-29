@@ -97,4 +97,3 @@ pub fn generate_handler_inputs(has_ctx: bool) -> TokenStream {
         quote! {}
     }
 }
-

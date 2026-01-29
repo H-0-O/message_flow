@@ -13,10 +13,11 @@ use crate::error::DefaultResponseErrorSchema;
 /// - `context`: Reference to the [`Context`] (for potential custom error handling)
 ///
 /// The handler must return a boxed error response that can be serialized.
-/// 
+///
 /// Note: Due to `Message` having an associated const (`IS_UNIT`), it is not object-safe.
 /// We use a concrete type (`DefaultResponseErrorSchema`) for error responses, which implements `Message`.
-pub type ErrorHandler = fn(code: u16, message: String, context: &Context) -> DefaultResponseErrorSchema;
+pub type ErrorHandler =
+    fn(code: u16, message: String, context: &Context) -> DefaultResponseErrorSchema;
 
 /// Application context passed to message handlers
 ///
@@ -75,11 +76,9 @@ impl Context {
         #[cfg(feature = "rabbitmq")] client: lapin::Channel,
     ) -> Context {
         Context {
-            error_handler: |code, message, _client| {
-                DefaultResponseErrorSchema {
-                    code,
-                    message: message,
-                }
+            error_handler: |code, message, _client| DefaultResponseErrorSchema {
+                code,
+                message: message,
             },
             client,
         }

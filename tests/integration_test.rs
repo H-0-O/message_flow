@@ -1,9 +1,9 @@
-use message_flow::{app::App, Context, DefaultResponseErrorSchema, Message, Result, registers};
-use message_flow_drive::{MsgDef, msg_flow};
-use futures::StreamExt;
 use async_nats::ConnectOptions;
-use std::sync::Arc;
+use futures::StreamExt;
+use message_flow::{Context, DefaultResponseErrorSchema, Message, Result, app::App, registers};
+use message_flow_drive::{MsgDef, msg_flow};
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
 #[derive(MsgDef, Debug, Serialize, Deserialize)]
 struct TestRequest {
@@ -17,7 +17,7 @@ struct TestRequest {
 #[ignore] // Ignore by default since it requires NATS server
 async fn test_app_creation() {
     let app_result = App::new("localhost:4222".to_string()).await;
-    
+
     match app_result {
         Ok(_app) => {
             // App created successfully
@@ -36,10 +36,10 @@ async fn test_message_serialization_integration() {
     let request = TestRequest {
         message: "Hello from integration test".to_string(),
     };
-    
+
     let json = request.to_json();
     assert!(!json.is_empty());
-    
+
     // Verify round-trip
     let deserialized: TestRequest = serde_json::from_str(&json).unwrap();
     assert_eq!(deserialized.message, "Hello from integration test");
@@ -51,9 +51,9 @@ fn test_error_response_format() {
         code: 500,
         message: "Test error message".to_string(),
     };
-    
+
     let json = error.to_json();
-    
+
     // Verify JSON structure
     let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
     assert_eq!(parsed["code"], 500);
@@ -121,5 +121,3 @@ async fn test_send_and_receive_message_over_nats() {
 
     assert_eq!(response.message, "echo: hello");
 }
-
-

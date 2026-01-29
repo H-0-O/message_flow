@@ -6,10 +6,7 @@
 use quote::quote;
 use syn::{parse_str, ItemStruct};
 
-use crate::{
-    constants::MESSAGE_TRAIT_PATH,
-    error::GeneratorResult,
-};
+use crate::{constants::MESSAGE_TRAIT_PATH, error::GeneratorResult};
 
 /// Generate the `Message` trait implementation for a struct
 ///
@@ -37,10 +34,10 @@ use crate::{
 pub fn generate(input: ItemStruct) -> GeneratorResult {
     let struct_name = &input.ident;
     let message_trait_path: syn::Path = parse_str(MESSAGE_TRAIT_PATH)?;
-    
+
     // Detect if struct is unit-like (no fields)
     let is_unit = matches!(input.fields, syn::Fields::Unit);
-    
+
     let expanded = quote! {
         #[automatically_derived]
         impl #message_trait_path for #struct_name {

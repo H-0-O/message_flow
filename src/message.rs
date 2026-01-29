@@ -82,7 +82,7 @@ impl<T: Message + Serialize + DeserializeOwned + Send> MessageSerialize for T {
         let result = serde_json::to_string(self);
         match result {
             Ok(val) => val,
-            Err(e) => panic!("Error happened {} " , e.is_data().to_string()),
+            Err(e) => panic!("Error happened {} ", e.is_data().to_string()),
         }
     }
 }
@@ -160,15 +160,35 @@ impl<T: Message + Serialize + DeserializeOwned> Message for Option<T> {
 impl<T: Message + Serialize + DeserializeOwned> Message for Vec<T> {
     const IS_UNIT: bool = false;
 }
-impl<T1: Message + Serialize + DeserializeOwned, T2: Message + Serialize + DeserializeOwned> Message for (T1, T2) {
+impl<T1: Message + Serialize + DeserializeOwned, T2: Message + Serialize + DeserializeOwned> Message
+    for (T1, T2)
+{
     const IS_UNIT: bool = false;
 }
-impl<T1: Message + Serialize + DeserializeOwned, T2: Message + Serialize + DeserializeOwned, T3: Message + Serialize + DeserializeOwned> Message for (T1, T2, T3) {
+impl<
+    T1: Message + Serialize + DeserializeOwned,
+    T2: Message + Serialize + DeserializeOwned,
+    T3: Message + Serialize + DeserializeOwned,
+> Message for (T1, T2, T3)
+{
     const IS_UNIT: bool = false;
 }
-impl<T1: Message + Serialize + DeserializeOwned, T2: Message + Serialize + DeserializeOwned, T3: Message + Serialize + DeserializeOwned, T4: Message + Serialize + DeserializeOwned> Message for (T1, T2, T3, T4) {
+impl<
+    T1: Message + Serialize + DeserializeOwned,
+    T2: Message + Serialize + DeserializeOwned,
+    T3: Message + Serialize + DeserializeOwned,
+    T4: Message + Serialize + DeserializeOwned,
+> Message for (T1, T2, T3, T4)
+{
     const IS_UNIT: bool = false;
 }
-impl<T1: Message + Serialize + DeserializeOwned, T2: Message + Serialize + DeserializeOwned, T3: Message + Serialize + DeserializeOwned, T4: Message + Serialize + DeserializeOwned, T5: Message + Serialize + DeserializeOwned> Message for (T1, T2, T3, T4, T5) {
+impl<
+    T1: Message + Serialize + DeserializeOwned,
+    T2: Message + Serialize + DeserializeOwned,
+    T3: Message + Serialize + DeserializeOwned,
+    T4: Message + Serialize + DeserializeOwned,
+    T5: Message + Serialize + DeserializeOwned,
+> Message for (T1, T2, T3, T4, T5)
+{
     const IS_UNIT: bool = false;
 }

@@ -6,11 +6,7 @@
 use quote::quote;
 use syn::{ImplItem, ItemImpl, Type};
 
-use crate::{
-    error::GeneratorResult,
-    register::generate_register_impl,
-    MsgFlowArgs,
-};
+use crate::{error::GeneratorResult, register::generate_register_impl, MsgFlowArgs};
 
 /// Extract the struct name from an impl block
 ///

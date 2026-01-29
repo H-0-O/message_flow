@@ -121,7 +121,7 @@ macro_rules! trace_log {
 
 // Re-export macros for convenience
 pub use debug_log;
-pub use info_log;
-pub use warn_log;
 pub use error_log;
+pub use info_log;
 pub use trace_log;
+pub use warn_log;

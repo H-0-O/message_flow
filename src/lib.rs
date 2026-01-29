@@ -50,13 +50,13 @@
 pub mod logger;
 
 pub mod app;
-pub mod error;
-pub mod context;
-pub mod result;
-pub mod util;
 pub(crate) mod backend;
+pub mod context;
+pub mod error;
 mod handler;
 mod message;
+pub mod result;
+pub mod util;
 
 /// Re-exported context type for message handlers
 pub use context::Context;
@@ -86,7 +86,7 @@ pub use async_trait::async_trait;
 pub use bytes::Bytes;
 
 // Re-export procedural macros from message_flow_drive
-pub use message_flow_drive::{msg_flow, MsgDef};
+pub use message_flow_drive::{MsgDef, msg_flow};
 
 // Compile-time checks to ensure exactly one broker backend is selected.
 #[cfg(all(feature = "nats", feature = "rabbitmq"))]

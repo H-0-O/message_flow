@@ -424,4 +424,3 @@ fn generate_event_handler_conditional(
         },
     }
 }
-
