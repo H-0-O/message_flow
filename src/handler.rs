@@ -21,10 +21,11 @@ use crate::{Context, Result};
 /// ## Example
 ///
 /// ```rust,no_run
-/// use message_flow::{msg_flow, message, MsgDef, Register};
+/// use futures::StreamExt;
+/// use message_flow::{msg_flow, MsgDef, Register, Message, Result};
 /// use serde::{Serialize, Deserialize};
 ///
-/// #[derive(MsgDef, Serialize, Deserialize)]
+/// #[derive(MsgDef, Serialize, Deserialize, Debug)]
 /// struct MyHandler {
 ///     data: String,
 /// }
@@ -32,7 +33,7 @@ use crate::{Context, Result};
 /// #[msg_flow(pattern = "service")]
 /// impl MyHandler {
 ///     #[message(pattern = "handler")]
-///     async fn handle(&self) -> Result<String, Box<dyn std::error::Error>> {
+///     async fn handle(&self) -> Result<String> {
 ///         Ok("Success".into())
 ///     }
 /// }

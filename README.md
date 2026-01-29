@@ -10,7 +10,6 @@
 - 🔒 Type-safe and structured messaging using `serde`  
 - 🌐 Broker-agnostic core (starting with NATS support)
 
-
 ---
 
 ## 🚀 Getting Started
@@ -18,8 +17,7 @@
 ### 📄 Define Message Handlers
 
 ```rust
-use message_flow::{msg_flow, message, registers, MsgDef};
-use anyhow::Result;
+use message_flow::{msg_flow, registers, MsgDef, Result};
 use serde::{Serialize, Deserialize};
 
 #[derive(MsgDef, Serialize, Deserialize, Debug)]
@@ -69,6 +67,10 @@ impl User2 {
 }
 ```
 
+> Note: `#[message(...)]` is a **helper attribute** that is consumed by `#[msg_flow]`.
+> You do not import a `message` proc-macro — just use the `#[message]` attribute on methods
+> inside a `#[msg_flow]` impl block.
+
 ---
 
 ## 🔌 Connecting to the Broker
@@ -84,19 +86,41 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+### Using RabbitMQ instead of NATS
+
+Enable the `rabbitmq` feature and disable `nats` in your `Cargo.toml`:
+
+```toml
+[dependencies]
+message_flow = { path = ".", default-features = false, features = ["rabbitmq"] }
+```
+
+Then pass an AMQP URI to `App::new`:
+
+```rust
+use message_flow::{App, registers};
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let app = App::new("amqp://guest:guest@localhost:5672/%2f".to_string()).await?;
+    app.connect_and_wait(registers!(User, User2)).await?;
+    Ok(())
+}
+```
+
 ### Custom Error Handling
 
 You can customize how errors are handled and formatted:
 
 ```rust
-use message_flow::{App, Message, DefaultResponseErrorSchema, registers};
+use message_flow::{App, DefaultResponseErrorSchema, registers};
 
 let app = App::new("localhost:4222".to_string()).await?
     .set_error_handler(|code, msg, _client| {
-        Box::new(DefaultResponseErrorSchema {
+        DefaultResponseErrorSchema {
             code,
             message: format!("Custom error: {}", msg),
-        })
+        }
     });
 app.connect_and_wait(registers!(User)).await?;
 ```
@@ -110,10 +134,12 @@ app.connect_and_wait(registers!(User)).await?;
 Derives the `Message` trait for a struct, allowing it to be used as a message type.
 
 **Requirements:**
+
 - Must also derive `Serialize`, `Deserialize` from `serde`
 - Must derive `Debug`
 
 **Example:**
+
 ```rust
 #[derive(MsgDef, Serialize, Deserialize, Debug)]
 struct MyMessage {
@@ -127,9 +153,11 @@ Marks an `impl` block as containing message handlers. The optional `pattern` par
 defines a base topic pattern that is prepended to all handler patterns.
 
 **Arguments:**
+
 - `pattern` (optional): Base pattern/topic for all handlers in this impl block
 
 **Example:**
+
 ```rust
 #[msg_flow(pattern = "service_name")]
 impl MyHandler {
@@ -142,23 +170,26 @@ impl MyHandler {
 Marks a method as a message handler. The method must be async and return a `Result`.
 
 **Arguments:**
+
 - `pattern` (required): The message pattern/topic for this handler
 
 **Handler Signature:**
+
 - Must be an async method
 - Can optionally take `&Context` as a parameter
-- Must return `Result<T, E>` where `T: Message`
+- Must return `message_flow::Result<T>` where `T: Message` (i.e. `Result<T, async_nats::Error>`)
 
 **Example:**
+
 ```rust
 #[message(pattern = "handler1")]
-async fn handle(&self) -> Result<String, Box<dyn std::error::Error>> {
+async fn handle(&self) -> message_flow::Result<String> {
     Ok("Response".into())
 }
 
 // With context
 #[message(pattern = "handler2")]
-async fn handle_with_context(&self, context: &Context) -> Result<String, Box<dyn std::error::Error>> {
+async fn handle_with_context(&self, context: &Context) -> message_flow::Result<String> {
     // Use context.client to send messages
     Ok("Response".into())
 }
@@ -169,9 +200,11 @@ async fn handle_with_context(&self, context: &Context) -> Result<String, Box<dyn
 Macro that creates an array of registration functions for multiple handler types.
 
 **Arguments:**
+
 - One or more handler types (comma-separated, trailing comma allowed)
 
 **Example:**
+
 ```rust
 registers!(User, User2, MyHandler)
 ```
@@ -189,7 +222,7 @@ registers!(User, User2, MyHandler)
 
 ### Message Flow
 
-```
+```text
 1. Define Message Struct → #[derive(MsgDef)]
 2. Implement Handlers → #[msg_flow] + #[message]
 3. Register with App → App::connect_and_wait(registers!(...))
@@ -201,12 +234,65 @@ registers!(User, User2, MyHandler)
 ### Pattern Matching
 
 Message patterns are constructed by combining:
+
 - Base pattern from `#[msg_flow(pattern = "...")]` (optional)
 - Handler pattern from `#[message(pattern = "...")]`
 
 **Example:**
+
 - `#[msg_flow(pattern = "service")]` + `#[message(pattern = "handler")]`
 - Results in subscription to: `"service.handler"`
+
+---
+
+## 🧩 Dynamic Schema (raw JSON handlers)
+
+Sometimes you want to accept **arbitrary JSON** (no strongly-typed request struct). `message_flow`
+supports this via a *dynamic schema* handler.
+
+### How it works
+
+Inside a `#[msg_flow]` impl block, a handler must be **either**:
+
+- **Static schema**: `async fn handler(&self, ...optional &Context...) -> message_flow::Result<T>`
+  - Payload is deserialized into `Self` (`serde_json::from_slice::<Self>(...)`)
+- **Dynamic schema**: `async fn handler(input: serde_json::Value, ...optional &Context...) -> message_flow::Result<T>`
+  - Payload is deserialized into `serde_json::Value` and passed to an **associated function**
+  - The handler **must not** take `&self`
+
+If you try to mix `&self` and `serde_json::Value` (or use neither), the macro emits a compile error.
+
+### Example
+
+```rust
+use message_flow::{msg_flow, MsgDef, Result};
+use serde::{Deserialize, Serialize};
+
+#[derive(MsgDef, Debug, Serialize, Deserialize)]
+struct Dynamic;
+
+#[derive(MsgDef, Debug, Serialize, Deserialize)]
+struct EchoResponse {
+    message: String,
+}
+
+#[msg_flow(pattern = "dynamic")]
+impl Dynamic {
+    // Dynamic schema handler: no `&self`, takes raw JSON payload.
+    #[message(pattern = "echo")]
+    async fn echo(input: serde_json::Value) -> Result<EchoResponse> {
+        Ok(EchoResponse {
+            message: format!("got: {}", input),
+        })
+    }
+}
+```
+
+Send a request (subject is `base_pattern + "." + message_pattern` → `dynamic.echo`):
+
+```bash
+nats request dynamic.echo '{"any":"shape","works":true}'
+```
 
 ### Error Handling
 
@@ -232,6 +318,12 @@ nats-server
 cargo test
 ```
 
+If you want to run the integration test that requires NATS, run ignored tests:
+
+```bash
+cargo test -- --ignored
+```
+
 ### Testing with NATS CLI
 
 Send messages from the command line:
@@ -247,7 +339,7 @@ nats pub service_A.1 '{"first_name":"John"}'
 ### Example Test
 
 ```rust
-use message_flow::{App, registers, msg_flow, message, MsgDef};
+use message_flow::{App, registers, msg_flow, MsgDef, Result};
 use serde::{Serialize, Deserialize};
 
 #[derive(MsgDef, Serialize, Deserialize, Debug)]
@@ -258,7 +350,7 @@ struct TestMessage {
 #[msg_flow(pattern = "test")]
 impl TestMessage {
     #[message(pattern = "echo")]
-    async fn echo(&self) -> Result<i32, Box<dyn std::error::Error>> {
+    async fn echo(&self) -> Result<i32> {
         Ok(self.value * 2)
     }
 }
@@ -301,9 +393,18 @@ debug_log!("Debug information: {}", value);
 ```
 
 Enable logging features in `Cargo.toml`:
+
 ```toml
 [features]
-default = ["log", "info", "warn", "error"]
+default = ["nats", "debug", "info", "warn", "error", "trace"]
+```
+
+The logging macros are compiled only when **both** `log` and the level feature are enabled
+(e.g. `log` + `info`). By default, this crate enables the level flags but does **not** enable
+`log`, so enable it in your dependency if you want logs:
+
+```toml
+message_flow = { path = ".", features = ["log"] }
 ```
 
 ## 📦 Planned Features
@@ -319,7 +420,7 @@ For immediate tasks and bugs, see [TODO.md](./TODO.md)
 
 ## 🔍 Project Structure
 
-```
+```text
 message_flow/
 ├── src/              # Main library code
 │   ├── app.rs        # Application initialization

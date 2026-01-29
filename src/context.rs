@@ -4,20 +4,19 @@
 //! handling functionality for message handlers.
 
 use crate::error::DefaultResponseErrorSchema;
-use async_nats::Client;
 
 /// Type alias for error handler functions
 ///
 /// Error handlers are called when a message handler encounters an error. They receive:
 /// - `code`: HTTP-style error code (e.g., 500 for server errors, 422 for validation errors)
 /// - `message`: Error message string
-/// - `client`: Reference to the NATS client (for potential custom error handling)
+/// - `context`: Reference to the [`Context`] (for potential custom error handling)
 ///
 /// The handler must return a boxed error response that can be serialized.
 /// 
 /// Note: Due to `Message` having an associated const (`IS_UNIT`), it is not object-safe.
 /// We use a concrete type (`DefaultResponseErrorSchema`) for error responses, which implements `Message`.
-pub type ErrorHandler = fn(code: u16, message: String, client: &Client) -> DefaultResponseErrorSchema;
+pub type ErrorHandler = fn(code: u16, message: String, context: &Context) -> DefaultResponseErrorSchema;
 
 /// Application context passed to message handlers
 ///
@@ -30,10 +29,11 @@ pub type ErrorHandler = fn(code: u16, message: String, client: &Client) -> Defau
 /// ## Example
 ///
 /// ```rust,no_run
-/// use message_flow::{msg_flow, message, Context, MsgDef};
+/// use futures::StreamExt;
+/// use message_flow::{msg_flow, Context, MsgDef, Message, Result};
 /// use serde::{Serialize, Deserialize};
 ///
-/// #[derive(MsgDef, Serialize, Deserialize)]
+/// #[derive(MsgDef, Serialize, Deserialize, Debug)]
 /// struct MyMessage {
 ///     data: String,
 /// }
@@ -41,7 +41,7 @@ pub type ErrorHandler = fn(code: u16, message: String, client: &Client) -> Defau
 /// #[msg_flow(pattern = "service")]
 /// impl MyMessage {
 ///     #[message(pattern = "handler")]
-///     async fn handle(&self, context: &Context) -> Result<String, Box<dyn std::error::Error>> {
+///     async fn handle(&self, context: &Context) -> Result<String> {
 ///         // Use context.client to send messages
 ///         Ok("Success".into())
 ///     }
@@ -50,8 +50,12 @@ pub type ErrorHandler = fn(code: u16, message: String, client: &Client) -> Defau
 pub struct Context {
     /// Function called when a handler encounters an error
     pub error_handler: ErrorHandler,
-    /// The NATS client for sending messages
-    pub client: Client,
+    /// The underlying broker client for sending messages
+    #[cfg(feature = "nats")]
+    pub client: async_nats::Client,
+    /// The underlying broker client for sending messages
+    #[cfg(feature = "rabbitmq")]
+    pub client: lapin::Channel,
 }
 
 impl Context {
@@ -61,12 +65,15 @@ impl Context {
     ///
     /// # Arguments
     ///
-    /// * `client` - A connected NATS client
+    /// * `client` - A connected broker client (NATS or RabbitMQ)
     ///
     /// # Returns
     ///
     /// Returns a new `Context` instance with default error handling.
-    pub fn new(client: Client) -> Context {
+    pub fn new(
+        #[cfg(feature = "nats")] client: async_nats::Client,
+        #[cfg(feature = "rabbitmq")] client: lapin::Channel,
+    ) -> Context {
         Context {
             error_handler: |code, message, _client| {
                 DefaultResponseErrorSchema {
@@ -74,7 +81,7 @@ impl Context {
                     message: message,
                 }
             },
-            client: client,
+            client,
         }
     }
 }

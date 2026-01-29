@@ -27,6 +27,7 @@ This document outlines the planned features, improvements, and milestones for th
 - Error handler support
 - Context passing to handlers
 - Basic logging infrastructure
+- Dynamic schema handlers (raw JSON via `serde_json::Value` handlers without `&self`)
 
 ### 🔄 Partially Implemented
 - Event support (code exists but needs completion and testing)
@@ -95,10 +96,10 @@ This document outlines the planned features, improvements, and milestones for th
 **Estimated Effort:** 5-7 days
 
 #### 6. Dynamic Schema Support
-- [ ] Support "dynamic schema" message types using empty marker structs with `#[derive(MsgDef)]` (e.g. `struct Dynamic;`)
-- [ ] Allow `#[msg_flow]` impl blocks on these marker types with non‑`self` handlers (no parsed input), forwarding the raw JSON payload from the client
-- [ ] Enforce at compile time that dynamic handlers return `Result<..>` (or adapt generated code accordingly), and emit clear errors otherwise
-- [ ] Document dynamic vs static schemas and provide examples (e.g. `Dynamic.greeting` that receives raw JSON)
+- [x] Support "dynamic schema" message types using empty marker structs with `#[derive(MsgDef)]` (e.g. `struct Dynamic;`)
+- [x] Allow `#[msg_flow]` impl blocks on these marker types with non‑`self` handlers (no parsed input), forwarding the raw JSON payload from the client
+- [x] Enforce at compile time that dynamic handlers use exactly one of: `&self` (static) or `serde_json::Value` (dynamic), emitting a clear compile error otherwise
+- [x] Document dynamic vs static schemas and provide examples (README now includes a Dynamic Schema section)
 
 **Priority:** Medium  
 **Estimated Effort:** 3-4 days
@@ -216,9 +217,9 @@ This document outlines the planned features, improvements, and milestones for th
 
 ### 🐛 Bug Fixes & Improvements
 
-- [ ] Fix unused variable warning in `app.rs` (line 27: `addr`)
+- [x] Fix unused variable warning in `app.rs` (line 27: `addr`) (no longer applicable; `addr` is used)
 - [ ] Review and improve error messages throughout codebase
-- [ ] Add input validation in macro code (see TODO in `msg_flow.rs` line 178)
+- [ ] Add input validation in macro code (roadmap reference to `msg_flow.rs:178` is outdated; re-evaluate and add a concrete TODO)
 - [ ] Improve type safety in message handling
 - [ ] Add bounds checking for patterns
 - [ ] Handle edge cases in message deserialization
@@ -350,5 +351,5 @@ We welcome contributions! If you'd like to work on any of these items:
 
 ---
 
-**Last Updated:** 2024  
+**Last Updated:** 2026-01-28  
 **Maintainer:** [Your Name/Team]

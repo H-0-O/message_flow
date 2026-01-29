@@ -5,8 +5,6 @@
 
 use std::sync::Arc;
 
-use async_nats::ConnectOptions;
-
 use crate::context::ErrorHandler;
 use crate::{RegisterFn, context::Context, logger};
 
@@ -19,8 +17,22 @@ use crate::{RegisterFn, context::Context, logger};
 ///
 /// ```rust,no_run
 /// use message_flow::{App, registers};
+/// use message_flow::{msg_flow, MsgDef, Message};
+/// use futures::StreamExt;
+/// use serde::{Serialize, Deserialize};
 ///
-/// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+/// #[derive(MsgDef, Serialize, Deserialize, Debug)]
+/// struct MyHandler;
+///
+/// #[msg_flow(pattern = "example")]
+/// impl MyHandler {
+///     #[message(pattern = "ping")]
+///     async fn ping(&self) -> message_flow::Result<String> {
+///         Ok("pong".into())
+///     }
+/// }
+///
+/// # async fn example() -> std::result::Result<(), Box<dyn std::error::Error>> {
 /// let app = App::new("localhost:4222".to_string()).await?;
 /// app.connect_and_wait(registers!(MyHandler)).await?;
 /// # Ok(())
@@ -36,7 +48,8 @@ impl App {
     ///
     /// # Arguments
     ///
-    /// * `addr` - The address of the message broker (e.g., "localhost:4222" for NATS)
+    /// * `addr` - The address of the message broker (e.g., "localhost:4222" for NATS,
+    ///            or an AMQP URI for RabbitMQ)
     ///
     /// # Returns
     ///
@@ -46,18 +59,50 @@ impl App {
     ///
     /// ```rust,no_run
     /// use message_flow::App;
+    /// use message_flow::{msg_flow, MsgDef, Message};
+    /// use futures::StreamExt;
+    /// use serde::{Serialize, Deserialize};
     ///
-    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// #[derive(MsgDef, Serialize, Deserialize, Debug)]
+    /// struct MyHandler;
+    ///
+    /// #[msg_flow(pattern = "example")]
+    /// impl MyHandler {
+    ///     #[message(pattern = "ping")]
+    ///     async fn ping(&self) -> message_flow::Result<String> {
+    ///         Ok("pong".into())
+    ///     }
+    /// }
+    ///
+    /// # async fn example() -> std::result::Result<(), Box<dyn std::error::Error>> {
     /// let app = App::new("localhost:4222".to_string()).await?;
     /// # Ok(())
     /// # }
     /// ```
     pub async fn new(addr: String) -> std::result::Result<App, Box<dyn std::error::Error>> {
-        let client = ConnectOptions::new().connect(&addr).await?;
+        #[cfg(feature = "nats")]
+        {
+            let client = async_nats::ConnectOptions::new().connect(&addr).await?;
+            let app = App {
+                context: Context::new(client),
+            };
+            return Ok(app);
+        }
+
+        #[cfg(feature = "rabbitmq")]
+        {
+            use lapin::{options::*, Connection, ConnectionProperties};
+
+            let connection = Connection::connect(&addr, ConnectionProperties::default()).await?;
+            let channel = connection.create_channel().await?;
         let app = App {
-            context: Context::new(client)
+                context: Context::new(channel),
         };
-        Ok(app)
+            return Ok(app);
+        }
+
+        #[allow(unreachable_code)]
+        Err("No broker backend enabled. Enable either `nats` or `rabbitmq` feature.".into())
     }
 
     /// Register handlers and connect to the broker
@@ -77,8 +122,27 @@ impl App {
     ///
     /// ```rust,no_run
     /// use message_flow::{App, registers};
+    /// use message_flow::{msg_flow, MsgDef, Message};
+    /// use futures::StreamExt;
+    /// use serde::{Serialize, Deserialize};
     ///
-    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// #[derive(MsgDef, Serialize, Deserialize, Debug)]
+    /// struct MyHandler1;
+    /// #[derive(MsgDef, Serialize, Deserialize, Debug)]
+    /// struct MyHandler2;
+    ///
+    /// #[msg_flow(pattern = "example")]
+    /// impl MyHandler1 {
+    ///     #[message(pattern = "ping")]
+    ///     async fn ping(&self) -> message_flow::Result<String> { Ok("pong".into()) }
+    /// }
+    /// #[msg_flow(pattern = "example")]
+    /// impl MyHandler2 {
+    ///     #[message(pattern = "ping2")]
+    ///     async fn ping2(&self) -> message_flow::Result<String> { Ok("pong2".into()) }
+    /// }
+    ///
+    /// # async fn example() -> std::result::Result<(), Box<dyn std::error::Error>> {
     /// let app = App::new("localhost:4222".to_string()).await?;
     /// app.connect(registers!(MyHandler1, MyHandler2)).await?;
     /// # Ok(())
@@ -117,8 +181,20 @@ impl App {
     ///
     /// ```rust,no_run
     /// use message_flow::{App, registers};
+    /// use message_flow::{msg_flow, MsgDef, Message};
+    /// use futures::StreamExt;
+    /// use serde::{Serialize, Deserialize};
     ///
-    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// #[derive(MsgDef, Serialize, Deserialize, Debug)]
+    /// struct MyHandler;
+    ///
+    /// #[msg_flow(pattern = "example")]
+    /// impl MyHandler {
+    ///     #[message(pattern = "ping")]
+    ///     async fn ping(&self) -> message_flow::Result<String> { Ok("pong".into()) }
+    /// }
+    ///
+    /// # async fn example() -> std::result::Result<(), Box<dyn std::error::Error>> {
     /// let app = App::new("localhost:4222".to_string()).await?;
     /// app.connect_and_wait(registers!(MyHandler)).await?;
     /// # Ok(())
@@ -151,15 +227,15 @@ impl App {
     /// # Example
     ///
     /// ```rust,no_run
-    /// use message_flow::{App, Message, DefaultResponseErrorSchema};
+    /// use message_flow::{App, DefaultResponseErrorSchema};
     ///
-    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn example() -> std::result::Result<(), Box<dyn std::error::Error>> {
     /// let app = App::new("localhost:4222".to_string()).await?
     ///     .set_error_handler(|code, msg, _client| {
-    ///         Box::new(DefaultResponseErrorSchema {
+    ///         DefaultResponseErrorSchema {
     ///             code,
     ///             message: format!("Custom error: {}", msg),
-    ///         })
+    ///         }
     ///     });
     /// # Ok(())
     /// # }

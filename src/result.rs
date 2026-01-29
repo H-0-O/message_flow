@@ -3,10 +3,11 @@
 //! This module provides convenient type aliases for common result types used
 //! throughout the message_flow library.
 
-/// Result type alias for NATS operations
+/// Result type alias for handler operations
 ///
-/// This is a convenience alias for `std::result::Result<T, async_nats::Error>`.
-/// It's used throughout the library for operations that interact with the NATS broker.
+/// This is a convenience alias for `std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>`.
+/// It's used throughout the library for operations that interact with the
+/// underlying message broker (NATS or RabbitMQ) or other fallible logic.
 ///
 /// ## Example
 ///
@@ -14,8 +15,8 @@
 /// use message_flow::Result;
 ///
 /// async fn example() -> Result<()> {
-///     // NATS operations return this Result type
+///     // Handler and broker operations return this Result type
 ///     Ok(())
 /// }
 /// ```
-pub type Result<T> = std::result::Result<T, async_nats::Error>;
+pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;

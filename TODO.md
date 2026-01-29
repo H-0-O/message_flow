@@ -4,9 +4,9 @@ Quick reference for immediate tasks and bugs to fix.
 
 ## 🐛 Critical Bugs
 
-- [ ] Fix unused variable `addr` in `src/app.rs:27` (used in logger but not in scope)
+- [x] Fix unused variable `addr` in `src/app.rs:27` (no longer applicable; `addr` is used)
 - [ ] Replace panic in `src/message.rs:21` with proper error handling
-- [ ] Add input validation in macro code (`drive/src/msg_flow.rs:178` - see TODO comment)
+- [ ] Add input validation in macro code (previous reference to `drive/src/msg_flow.rs:178` appears outdated; add a fresh concrete location/issue)
 
 ## 🚀 High Priority Features
 
@@ -17,6 +17,7 @@ Quick reference for immediate tasks and bugs to fix.
 ## 📚 Documentation
 
 - [ ] Add event macro examples to README
+- [x] Document dynamic schema vs static schema (added to README)
 - [ ] Document error handling patterns
 - [ ] Add troubleshooting section
 

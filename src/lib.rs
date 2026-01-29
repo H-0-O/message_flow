@@ -19,7 +19,8 @@
 //! ## Example
 //!
 //! ```rust,no_run
-//! use message_flow::{msg_flow, message, registers, MsgDef};
+//! use futures::StreamExt;
+//! use message_flow::{msg_flow, registers, MsgDef, Message, Result};
 //! use serde::{Serialize, Deserialize};
 //!
 //! #[derive(MsgDef, Serialize, Deserialize, Debug)]
@@ -30,7 +31,7 @@
 //! #[msg_flow(pattern = "service_A")]
 //! impl User {
 //!     #[message(pattern = "1")]
-//!     async fn greeting(&self) -> Result<String, Box<dyn std::error::Error>> {
+//!     async fn greeting(&self) -> Result<String> {
 //!         Ok("Hello!".into())
 //!     }
 //! }
@@ -53,11 +54,15 @@ pub mod error;
 pub mod context;
 pub mod result;
 pub mod util;
+pub(crate) mod backend;
 mod handler;
 mod message;
 
 /// Re-exported context type for message handlers
 pub use context::Context;
+
+/// Re-exported application type (common entry point)
+pub use app::App;
 
 /// Default error response schema
 pub use error::DefaultResponseErrorSchema;
@@ -74,9 +79,6 @@ pub use result::Result;
 /// Utility macros and functions
 pub use util::*;
 
-/// Re-exported NATS client type
-pub use async_nats::Client;
-
 /// Re-exported async trait for trait definitions
 pub use async_trait::async_trait;
 
@@ -85,3 +87,10 @@ pub use bytes::Bytes;
 
 // Re-export procedural macros from message_flow_drive
 pub use message_flow_drive::{msg_flow, MsgDef};
+
+// Compile-time checks to ensure exactly one broker backend is selected.
+#[cfg(all(feature = "nats", feature = "rabbitmq"))]
+compile_error!("Features `nats` and `rabbitmq` are mutually exclusive. Enable only one of them.");
+
+#[cfg(not(any(feature = "nats", feature = "rabbitmq")))]
+compile_error!("You must enable exactly one backend feature: either `nats` or `rabbitmq`.");

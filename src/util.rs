@@ -30,8 +30,27 @@ pub type RegisterFn = fn(Arc<Context>) -> Pin<Box<dyn Future<Output = Result<()>
 ///
 /// ```rust,no_run
 /// use message_flow::{registers, App};
+/// use message_flow::{msg_flow, MsgDef, Message};
+/// use futures::StreamExt;
+/// use serde::{Serialize, Deserialize};
 ///
-/// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+/// #[derive(MsgDef, Serialize, Deserialize, Debug)]
+/// struct MyHandler1;
+/// #[derive(MsgDef, Serialize, Deserialize, Debug)]
+/// struct MyHandler2;
+///
+/// #[msg_flow(pattern = "example")]
+/// impl MyHandler1 {
+///     #[message(pattern = "ping")]
+///     async fn ping(&self) -> message_flow::Result<String> { Ok("pong".into()) }
+/// }
+/// #[msg_flow(pattern = "example")]
+/// impl MyHandler2 {
+///     #[message(pattern = "ping2")]
+///     async fn ping2(&self) -> message_flow::Result<String> { Ok("pong2".into()) }
+/// }
+///
+/// # async fn example() -> std::result::Result<(), Box<dyn std::error::Error>> {
 /// let app = App::new("localhost:4222".to_string()).await?;
 /// app.connect_and_wait(registers!(MyHandler1, MyHandler2)).await?;
 /// # Ok(())

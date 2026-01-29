@@ -220,8 +220,7 @@ fn generate_subscription_code(
         tokio::spawn({
             let context = context.clone();
             async move {
-                let client = &context.client;
-                let mut subscription = client.subscribe(#topic_pattern).await?;
+                let mut subscription = message_flow::backend::subscribe(&context, #topic_pattern).await?;
 
                 message_flow::logger::info_log!(
                     "Spawned task for struct {}",
@@ -238,7 +237,7 @@ fn generate_subscription_code(
                     #handler_code
                 }
 
-                Ok::<(), async_nats::Error>(())
+                Ok::<(), message_flow::backend::BrokerError>(())
             }
         });
     }
@@ -259,14 +258,14 @@ fn generate_subscription_code(
 /// Returns a `TokenStream` containing the reply sending code.
 fn generate_reply_block(struct_name: &syn::Ident) -> TokenStream {
     quote! {
-        if let Some(reply) = msg.reply {
+        if let Some(reply) = msg.reply.clone() {
             message_flow::logger::info_log!(
                 "Sending reply for struct {}: {:?}",
                 stringify!(#struct_name),
                 reply
             );
             let byte_response = bytes::Bytes::from(body);
-            let _ = client.publish(reply, byte_response).await?;
+            let _ = message_flow::backend::publish_reply(&context, &reply, byte_response).await?;
         }
     }
 }
@@ -298,12 +297,12 @@ fn generate_message_handler_conditional(
                             let result = resolver.#function_name(&*context).await;
                             let body = match result {
                                 Ok(val) => val.to_json(),
-                                Err(_err) => (context.error_handler)(500, _err.to_string(), client).to_json(),
+                                Err(_err) => (context.error_handler)(500, _err.to_string(), &*context).to_json(),
                             };
                             #reply_block
                         }
                         Err(_error) => {
-                            let body = (context.error_handler)(422, _error.to_string(), client).to_json();
+                            let body = (context.error_handler)(422, _error.to_string(), &*context).to_json();
                             #reply_block
                         }
                     }
@@ -315,12 +314,12 @@ fn generate_message_handler_conditional(
                             let result = resolver.#function_name().await;
                             let body = match result {
                                 Ok(val) => val.to_json(),
-                                Err(_err) => (context.error_handler)(500, _err.to_string(), client).to_json(),
+                                Err(_err) => (context.error_handler)(500, _err.to_string(), &*context).to_json(),
                             };
                             #reply_block
                         }
                         Err(_error) => {
-                            let body = (context.error_handler)(422, _error.to_string(), client).to_json();
+                            let body = (context.error_handler)(422, _error.to_string(), &*context).to_json();
                             #reply_block
                         }
                     }
@@ -336,12 +335,12 @@ fn generate_message_handler_conditional(
                             let result = <#struct_name>::#function_name(&*context, input_value).await;
                             let body = match result {
                                 Ok(val) => val.to_json(),
-                                Err(_err) => (context.error_handler)(500, _err.to_string(), client).to_json(),
+                                Err(_err) => (context.error_handler)(500, _err.to_string(), &*context).to_json(),
                             };
                             #reply_block
                         }
                         Err(_error) => {
-                            let body = (context.error_handler)(422, _error.to_string(), client).to_json();
+                            let body = (context.error_handler)(422, _error.to_string(), &*context).to_json();
                             #reply_block
                         }
                     }
@@ -353,12 +352,12 @@ fn generate_message_handler_conditional(
                             let result = <#struct_name>::#function_name(input_value).await;
                             let body = match result {
                                 Ok(val) => val.to_json(),
-                                Err(_err) => (context.error_handler)(500, _err.to_string(), client).to_json(),
+                                Err(_err) => (context.error_handler)(500, _err.to_string(), &*context).to_json(),
                             };
                             #reply_block
                         }
                         Err(_error) => {
-                            let body = (context.error_handler)(422, _error.to_string(), client).to_json();
+                            let body = (context.error_handler)(422, _error.to_string(), &*context).to_json();
                             #reply_block
                         }
                     }
