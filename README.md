@@ -78,8 +78,11 @@ impl User2 {
 async fn main() {
     println!("BEFORE");
 
-    let _result = message_flow::connection::connect_and_wait(
-        "localhost:4222".into(),
+    let app = message_flow::app::App::new("localhost:4222".into())
+        .await
+        .unwrap();
+
+    let _result = app.connect_and_wait(
         registers!(User, User2)
     )
     .await
